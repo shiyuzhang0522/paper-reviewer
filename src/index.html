@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paper Reviewer App</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Paper Reviewer</h1>
+    <p>Highlight text, add comments, and review with ease.</p>
+  </header>
+
+  <main>
+    <section class="viewer-panel">
+      <div class="panel-header">
+        <h2>Manuscript</h2>
+        <button id="import-button">Import text</button>
+      </div>
+      <div id="manuscript" class="manuscript" tabindex="0">
+        <p>Select text to add highlights and comments.</p>
+        <p>When you read a paper, highlight the important points and classify them as strengths, weaknesses, questions, or suggestions.</p>
+        <p>Use the comment panel to capture your review feedback and export a summary later.</p>
+      </div>
+    </section>
+
+    <aside class="comment-panel">
+      <div class="panel-header">
+        <h2>Review Annotations</h2>
+      </div>
+      <div id="comment-list" class="comment-list">
+        <p class="empty-state">No highlights yet. Select text to start.</p>
+      </div>
+    </aside>
+  </main>
+
+  <div id="selection-menu" class="selection-menu hidden">
+    <button data-action="highlight">Highlight</button>
+    <button data-action="comment">Comment</button>
+    <button data-action="tag">Tag</button>
+  </div>
+
+  <template id="comment-template">
+    <div class="comment-card">
+      <div class="comment-meta">
+        <span class="comment-tag">Tag</span>
+        <span class="comment-time"></span>
+      </div>
+      <div class="comment-text"></div>
+      <div class="comment-highlight"></div>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
