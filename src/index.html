@@ -7,51 +7,204 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header>
-    <h1>Paper Reviewer</h1>
-    <p>Highlight text, add comments, and review with ease.</p>
+  <header class="app-header">
+    <div>
+      <h1>Paper Reviewer</h1>
+      <p>Read the PDF, capture evidence, and shape your review as you go.</p>
+    </div>
+    <div class="header-actions">
+      <button id="clear-review-button" class="quiet-button" type="button">Clear review</button>
+      <button id="save-pdf-button" type="button">Save to Original PDF</button>
+      <button id="summary-button" class="primary-button" type="button">Review Summary</button>
+    </div>
   </header>
 
   <main>
     <section class="viewer-panel">
       <div class="panel-header">
-        <h2>Manuscript</h2>
-        <button id="import-button">Import text</button>
+        <div>
+          <h2>PDF Manuscript</h2>
+          <p class="panel-note">Open a text-based PDF and select manuscript text to add a linked note.</p>
+        </div>
+        <button id="open-pdf-button" class="primary-button" type="button">Open PDF</button>
+        <input id="pdf-input" class="sr-only" type="file" accept="application/pdf" />
       </div>
-      <div id="manuscript" class="manuscript" tabindex="0">
-        <p>Select text to add highlights and comments.</p>
-        <p>When you read a paper, highlight the important points and classify them as strengths, weaknesses, questions, or suggestions.</p>
-        <p>Use the comment panel to capture your review feedback and export a summary later.</p>
+
+      <div class="pdf-toolbar" aria-label="PDF controls">
+        <button id="prev-page-button" type="button">Previous</button>
+        <span id="page-status" class="page-status">No PDF loaded</span>
+        <button id="next-page-button" type="button">Next</button>
+        <button id="zoom-out-button" type="button">-</button>
+        <span id="zoom-status" class="page-status">100%</span>
+        <button id="zoom-in-button" type="button">+</button>
+      </div>
+
+      <div class="review-toolbar" aria-label="Annotation defaults">
+        <div class="toolbar-group" aria-label="Tag">
+          <span class="toolbar-label">Tag</span>
+          <button class="tag-option active" data-tag="Strength" type="button">Strength</button>
+          <button class="tag-option" data-tag="Weakness" type="button">Weakness</button>
+          <button class="tag-option" data-tag="Question" type="button">Question</button>
+          <button class="tag-option" data-tag="Suggestion" type="button">Suggestion</button>
+        </div>
+        <label class="toolbar-field" for="section-select">
+          <span>Section</span>
+          <select id="section-select">
+            <option>Summary</option>
+            <option>Methods</option>
+            <option>Results</option>
+            <option>Writing</option>
+            <option>Overall</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="status-message" class="status-message hidden" role="status"></div>
+
+      <div id="pdf-viewer" class="pdf-viewer" tabindex="0">
+        <div id="pdf-empty-state" class="pdf-empty-state">
+          <h2>Load a manuscript PDF</h2>
+          <p>The PDF will appear here with selectable text. Your saved notes are written back into the original PDF.</p>
+        </div>
       </div>
     </section>
 
     <aside class="comment-panel">
-      <div class="panel-header">
-        <h2>Review Annotations</h2>
+      <section class="metadata-panel" aria-label="Manuscript metadata">
+        <div class="panel-header">
+          <div>
+            <h2>Manuscript Details</h2>
+            <p class="panel-note">Auto-filled when possible. Edit anything that looks off.</p>
+          </div>
+        </div>
+        <div class="metadata-grid">
+          <label for="metadata-title">
+            <span>Title</span>
+            <input id="metadata-title" type="text" placeholder="Manuscript title" />
+          </label>
+          <label for="metadata-authors">
+            <span>Authors</span>
+            <input id="metadata-authors" type="text" placeholder="Author names" />
+          </label>
+          <label for="metadata-journal">
+            <span>Journal</span>
+            <input id="metadata-journal" type="text" placeholder="Journal or venue" />
+          </label>
+          <label for="metadata-date">
+            <span>Date</span>
+            <input id="metadata-date" type="text" placeholder="Date" />
+          </label>
+        </div>
+      </section>
+
+      <div class="panel-header notes-header">
+        <div>
+          <h2>Review Annotations</h2>
+          <p class="panel-note">Click a note to jump back to its PDF highlight.</p>
+        </div>
       </div>
-      <div id="comment-list" class="comment-list">
-        <p class="empty-state">No highlights yet. Select text to start.</p>
+
+      <div class="filter-bar">
+        <label for="tag-filter">
+          <span>Tag</span>
+          <select id="tag-filter">
+            <option value="all">All tags</option>
+            <option>Strength</option>
+            <option>Weakness</option>
+            <option>Question</option>
+            <option>Suggestion</option>
+          </select>
+        </label>
+        <label for="section-filter">
+          <span>Section</span>
+          <select id="section-filter">
+            <option value="all">All sections</option>
+            <option>Summary</option>
+            <option>Methods</option>
+            <option>Results</option>
+            <option>Writing</option>
+            <option>Overall</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="comment-list" class="comment-list review-pages">
+        <p class="empty-state">No PDF notes yet. Load a PDF and select text to start.</p>
       </div>
     </aside>
   </main>
 
   <div id="selection-menu" class="selection-menu hidden">
-    <button data-action="highlight">Highlight</button>
-    <button data-action="comment">Comment</button>
-    <button data-action="tag">Tag</button>
+    <button id="add-note-button" class="primary-button" type="button">Add note</button>
   </div>
 
+  <section id="annotation-editor" class="annotation-editor hidden" aria-label="Annotation editor">
+    <div class="editor-header">
+      <h2>Add annotation</h2>
+      <button id="close-editor-button" class="icon-button" type="button" aria-label="Close annotation editor">x</button>
+    </div>
+    <div class="selected-preview" id="selected-preview"></div>
+    <div class="editor-grid">
+      <label for="editor-tag">
+        <span>Tag</span>
+        <select id="editor-tag">
+          <option>Strength</option>
+          <option>Weakness</option>
+          <option>Question</option>
+          <option>Suggestion</option>
+        </select>
+      </label>
+      <label for="editor-section">
+        <span>Section</span>
+        <select id="editor-section">
+          <option>Summary</option>
+          <option>Methods</option>
+          <option>Results</option>
+          <option>Writing</option>
+          <option>Overall</option>
+        </select>
+      </label>
+    </div>
+    <label for="editor-comment">
+      <span>Reviewer note</span>
+      <textarea id="editor-comment" rows="5" placeholder="Write your reasoning, concern, or suggested phrasing."></textarea>
+    </label>
+    <div class="form-actions">
+      <button id="save-annotation-button" class="primary-button" type="button">Save annotation</button>
+      <button id="cancel-annotation-button" type="button">Cancel</button>
+    </div>
+  </section>
+
+  <section id="summary-dialog" class="summary-dialog hidden" aria-label="Review summary">
+    <div class="summary-card">
+      <div class="editor-header">
+        <h2>Review Summary</h2>
+        <button id="close-summary-button" class="icon-button" type="button" aria-label="Close review summary">x</button>
+      </div>
+      <textarea id="summary-output" rows="16" readonly></textarea>
+      <div class="form-actions">
+        <button id="save-summary-button" type="button">Save summary</button>
+        <button id="copy-summary-button" class="primary-button" type="button">Copy markdown</button>
+        <button id="dismiss-summary-button" type="button">Done</button>
+      </div>
+      <p id="copy-status" class="copy-status" role="status"></p>
+    </div>
+  </section>
+
   <template id="comment-template">
-    <div class="comment-card">
+    <article class="comment-card">
       <div class="comment-meta">
         <span class="comment-tag">Tag</span>
+        <span class="comment-section"></span>
+        <span class="comment-page"></span>
         <span class="comment-time"></span>
       </div>
-      <div class="comment-text"></div>
-      <div class="comment-highlight"></div>
-    </div>
+      <blockquote class="comment-highlight"></blockquote>
+      <p class="comment-text"></p>
+    </article>
   </template>
 
+  <script src="vendor/pdfjs/pdf.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

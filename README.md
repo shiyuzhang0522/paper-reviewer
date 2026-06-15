@@ -1,39 +1,47 @@
 # Paper Reviewer App
 
-A lightweight app to read manuscripts like a reviewer, highlight text, and add structured comments.
+An installable desktop PDF reviewer for reading manuscripts, linking selected PDF text to review notes, saving annotations into the original PDF, and exporting markdown summaries beside the manuscript.
 
 ## Purpose
 
-- Highlight important passages
-- Add comments linked to highlights
-- Tag items as `Strength`, `Weakness`, `Question`, or `Suggestion`
-- Keep review notes organized by section
-- Export a review summary
+- Open a manuscript PDF in the left half of the app
+- Write page-matched review notes in the right half
+- Auto-fill editable manuscript details: title, authors, journal, and date
+- Select PDF text and add linked notes with colored highlights
+- Tag notes as `Strength`, `Weakness`, `Question`, or `Suggestion`
+- Save annotations directly into the original PDF so they open in Preview
+- Save a markdown review summary next to the source PDF by default
 
 ## Getting started
 
-1. Open `src/index.html` in a browser.
-2. Use the sample text viewer to add highlights and comments.
-3. Improve the app by adding PDF support, persistence, and export features.
+Install dependencies once:
+
+```bash
+npm install
+```
+
+Run the desktop app:
+
+```bash
+npm start
+```
+
+Build a macOS app package:
+
+```bash
+npm run package:mac
+```
 
 ## File structure
 
-- `src/index.html` — starter layout
-- `src/styles.css` — styles
-- `src/app.js` — interaction logic
-- `DESIGN.md` — app design notes
+- `electron/main.js` - Electron window, native dialogs, PDF/summary saving, review-state storage
+- `electron/preload.js` - secure renderer bridge for native file actions
+- `src/index.html` - app layout
+- `src/styles.css` - pink/purple desktop UI
+- `src/app.js` - PDF rendering and review interaction logic
+- `src/vendor/pdfjs/` - local PDF.js runtime
+- `DESIGN.md` - app design notes
 
-## Git workflow
+## Notes
 
-- Create branches for each new feature
-- Commit frequently with clear messages
-- Keep this repo updated as you add features
-
-Example:
-
-```bash
-cd /Users/shelleyz/Documents/GitHub/paper-reviewer
-git checkout -b feature/highlight-comments
-git add .
-git commit -m "Add review comment panel and highlight styles"
-```
+The app writes Paper Reviewer highlights/comments directly into the opened PDF. Writes are done through a temporary file and replace step so failed saves do not leave a half-written manuscript. Review summaries default to the same folder as the opened PDF.
