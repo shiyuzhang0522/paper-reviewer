@@ -33,8 +33,9 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1480,
     height: 980,
-    minWidth: 1120,
-    minHeight: 760,
+    minWidth: 420,
+    minHeight: 360,
+    resizable: true,
     title: 'Paper Reviewer',
     backgroundColor: '#fbf7ff',
     webPreferences: {

@@ -129,7 +129,7 @@ label span,
 main {
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(320px, var(--paper-pane-width)) 10px minmax(320px, 1fr);
+  grid-template-columns: minmax(220px, var(--paper-pane-width)) 10px minmax(220px, 1fr);
   padding: 8px 12px 12px;
   height: calc(100vh - 62px);
 }
@@ -773,14 +773,16 @@ body.preview-companion .preview-companion-panel {
   display: none;
 }
 
-@media (max-width: 1000px) {
+@media (max-width: 760px) {
   .app-header,
   main {
-    padding: 14px;
+    padding: 8px;
   }
 
   main {
     grid-template-columns: 1fr;
+    height: auto;
+    min-height: calc(100vh - 62px);
   }
 
   .split-resizer {
@@ -797,7 +799,7 @@ body.preview-companion .preview-companion-panel {
   }
 
   .pdf-viewer {
-    height: 70vh;
+    height: 58vh;
   }
 }
 
