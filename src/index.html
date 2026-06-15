@@ -10,23 +10,29 @@
   <header class="app-header">
     <div>
       <h1>Paper Reviewer</h1>
-      <p>Read the PDF, capture evidence, and shape your review as you go.</p>
+      <p>Attention is all you need.</p>
     </div>
     <div class="header-actions">
+      <button id="preview-mode-button" type="button">Preview Companion</button>
       <button id="clear-review-button" class="quiet-button" type="button">Clear review</button>
       <button id="save-pdf-button" type="button">Save to Original PDF</button>
       <button id="summary-button" class="primary-button" type="button">Review Summary</button>
     </div>
   </header>
 
-  <main>
+  <main id="workspace">
     <section class="viewer-panel">
       <div class="panel-header">
         <div>
           <h2>PDF Manuscript</h2>
           <p class="panel-note">Open a text-based PDF and select manuscript text to add a linked note.</p>
         </div>
-        <button id="open-pdf-button" class="primary-button" type="button">Open PDF</button>
+        <div class="panel-actions">
+          <button id="toggle-paper-controls-button" class="quiet-button" type="button" aria-expanded="true">Hide controls</button>
+          <button id="open-preview-button" type="button">Open in Preview</button>
+          <button id="reload-pdf-button" type="button">Reload PDF</button>
+          <button id="open-pdf-button" class="primary-button" type="button">Open PDF</button>
+        </div>
         <input id="pdf-input" class="sr-only" type="file" accept="application/pdf" />
       </div>
 
@@ -50,16 +56,45 @@
         <label class="toolbar-field" for="section-select">
           <span>Section</span>
           <select id="section-select">
-            <option>Summary</option>
+            <option>Abstract</option>
+            <option>Introduction</option>
             <option>Methods</option>
             <option>Results</option>
+            <option>Discussion</option>
+            <option>Summary</option>
             <option>Writing</option>
             <option>Overall</option>
           </select>
         </label>
+        <label class="toolbar-field compact-field" for="mark-type-select">
+          <span>Mark</span>
+          <select id="mark-type-select">
+            <option value="highlight">Highlight</option>
+            <option value="underline">Underline</option>
+          </select>
+        </label>
+        <div class="toolbar-group color-group" aria-label="Annotation color">
+          <span class="toolbar-label">Color</span>
+          <button class="color-option active" data-color="pink" type="button" aria-label="Pink"></button>
+          <button class="color-option" data-color="purple" type="button" aria-label="Purple"></button>
+          <button class="color-option" data-color="yellow" type="button" aria-label="Yellow"></button>
+          <button class="color-option" data-color="green" type="button" aria-label="Green"></button>
+          <button class="color-option" data-color="blue" type="button" aria-label="Blue"></button>
+          <button class="color-option" data-color="orange" type="button" aria-label="Orange"></button>
+          <button class="color-option" data-color="red" type="button" aria-label="Red"></button>
+        </div>
       </div>
 
       <div id="status-message" class="status-message hidden" role="status"></div>
+
+      <section id="preview-companion-panel" class="preview-companion-panel">
+        <h2>Preview Companion</h2>
+        <p>Use macOS Preview for original-PDF highlights and underlines. Keep this review page open for notes and summary writing.</p>
+        <div class="preview-companion-actions">
+          <button id="companion-open-preview-button" class="primary-button" type="button">Open in Preview</button>
+          <button id="companion-reload-pdf-button" type="button">Reload PDF</button>
+        </div>
+      </section>
 
       <div id="pdf-viewer" class="pdf-viewer" tabindex="0">
         <div id="pdf-empty-state" class="pdf-empty-state">
@@ -69,26 +104,22 @@
       </div>
     </section>
 
+    <div id="split-resizer" class="split-resizer" role="separator" aria-orientation="vertical" aria-label="Resize paper and review panels" aria-valuemin="32" aria-valuemax="68" aria-valuenow="50" tabindex="0"></div>
+
     <aside class="comment-panel">
       <section class="metadata-panel" aria-label="Manuscript metadata">
-        <div class="panel-header">
-          <div>
-            <h2>Manuscript Details</h2>
-            <p class="panel-note">Auto-filled when possible. Edit anything that looks off.</p>
-          </div>
-        </div>
         <div class="metadata-grid">
           <label for="metadata-title">
             <span>Title</span>
-            <input id="metadata-title" type="text" placeholder="Manuscript title" />
+            <textarea id="metadata-title" class="metadata-field" rows="2" placeholder="Manuscript title"></textarea>
           </label>
           <label for="metadata-authors">
             <span>Authors</span>
-            <input id="metadata-authors" type="text" placeholder="Author names" />
+            <textarea id="metadata-authors" class="metadata-field" rows="2" placeholder="Author names"></textarea>
           </label>
           <label for="metadata-journal">
             <span>Journal</span>
-            <input id="metadata-journal" type="text" placeholder="Journal or venue" />
+            <textarea id="metadata-journal" class="metadata-field" rows="2" placeholder="Journal or venue"></textarea>
           </label>
           <label for="metadata-date">
             <span>Date</span>
@@ -99,43 +130,28 @@
 
       <div class="panel-header notes-header">
         <div>
-          <h2>Review Annotations</h2>
-          <p class="panel-note">Click a note to jump back to its PDF highlight.</p>
+          <h2>Review Notes</h2>
+          <p class="panel-note">Write freely. Linked PDF selections will appear on this page.</p>
         </div>
       </div>
 
-      <div class="filter-bar">
-        <label for="tag-filter">
-          <span>Tag</span>
-          <select id="tag-filter">
-            <option value="all">All tags</option>
-            <option>Strength</option>
-            <option>Weakness</option>
-            <option>Question</option>
-            <option>Suggestion</option>
-          </select>
-        </label>
-        <label for="section-filter">
-          <span>Section</span>
-          <select id="section-filter">
-            <option value="all">All sections</option>
-            <option>Summary</option>
-            <option>Methods</option>
-            <option>Results</option>
-            <option>Writing</option>
-            <option>Overall</option>
-          </select>
-        </label>
-      </div>
-
-      <div id="comment-list" class="comment-list review-pages">
-        <p class="empty-state">No PDF notes yet. Load a PDF and select text to start.</p>
+      <div class="review-page-shell">
+        <div
+          id="review-draft"
+          class="review-draft"
+          contenteditable="true"
+          role="textbox"
+          aria-multiline="true"
+          aria-label="Review notes"
+          data-placeholder="Start writing your review notes here."
+        ></div>
       </div>
     </aside>
   </main>
 
   <div id="selection-menu" class="selection-menu hidden">
-    <button id="add-note-button" class="primary-button" type="button">Add note</button>
+    <button id="mark-pdf-button" type="button">Mark PDF</button>
+    <button id="add-note-button" class="primary-button" type="button">Note</button>
   </div>
 
   <section id="annotation-editor" class="annotation-editor hidden" aria-label="Annotation editor">
@@ -157,11 +173,33 @@
       <label for="editor-section">
         <span>Section</span>
         <select id="editor-section">
-          <option>Summary</option>
+          <option>Abstract</option>
+          <option>Introduction</option>
           <option>Methods</option>
           <option>Results</option>
+          <option>Discussion</option>
+          <option>Summary</option>
           <option>Writing</option>
           <option>Overall</option>
+        </select>
+      </label>
+      <label for="editor-mark-type">
+        <span>Mark</span>
+        <select id="editor-mark-type">
+          <option value="highlight">Highlight</option>
+          <option value="underline">Underline</option>
+        </select>
+      </label>
+      <label for="editor-color">
+        <span>Color</span>
+        <select id="editor-color">
+          <option value="pink">Pink</option>
+          <option value="purple">Purple</option>
+          <option value="yellow">Yellow</option>
+          <option value="green">Green</option>
+          <option value="blue">Blue</option>
+          <option value="orange">Orange</option>
+          <option value="red">Red</option>
         </select>
       </label>
     </div>
@@ -190,19 +228,6 @@
       <p id="copy-status" class="copy-status" role="status"></p>
     </div>
   </section>
-
-  <template id="comment-template">
-    <article class="comment-card">
-      <div class="comment-meta">
-        <span class="comment-tag">Tag</span>
-        <span class="comment-section"></span>
-        <span class="comment-page"></span>
-        <span class="comment-time"></span>
-      </div>
-      <blockquote class="comment-highlight"></blockquote>
-      <p class="comment-text"></p>
-    </article>
-  </template>
 
   <script src="vendor/pdfjs/pdf.min.js"></script>
   <script src="app.js"></script>
