@@ -15,9 +15,12 @@
     "files": [
       "electron/**/*",
       "src/**/*",
+      "build/icon.png",
+      "build/icon.icns",
       "package.json"
     ],
     "mac": {
+      "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
       "target": [
         "dmg"

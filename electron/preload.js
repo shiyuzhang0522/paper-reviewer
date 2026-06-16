@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('paperReviewerAPI', {
   openPdf: () => ipcRenderer.invoke('pdf:open'),
+  openImage: () => ipcRenderer.invoke('image:open'),
   readPdf: (payload) => ipcRenderer.invoke('pdf:read', payload),
   openInPreview: (payload) => ipcRenderer.invoke('pdf:openInPreview', payload),
   tilePreviewCompanion: () => ipcRenderer.invoke('window:tilePreviewCompanion'),

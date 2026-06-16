@@ -15,11 +15,13 @@ const {
 } = require('pdf-lib');
 
 const REVIEW_DIR = 'reviews';
+const SUMMARY_ASSET_DIR_PLACEHOLDER = 'review-summary-assets';
 const execFileAsync = promisify(execFile);
 const MAX_HIGHLIGHT_RECT_HEIGHT = 0.035;
 const MAX_HIGHLIGHT_RECT_WIDTH = 0.92;
 const MAX_HIGHLIGHT_RECT_AREA = 0.025;
 const PREVIEW_TILE_DELAY_MS = 700;
+const APP_ICON_PATH = path.join(__dirname, '..', 'build', 'icon.png');
 
 let mainWindow = null;
 
@@ -30,6 +32,10 @@ function wait(milliseconds) {
 }
 
 function createWindow() {
+  if (process.platform === 'darwin') {
+    app.dock?.setIcon(APP_ICON_PATH);
+  }
+
   const win = new BrowserWindow({
     width: 1480,
     height: 980,
@@ -37,6 +43,7 @@ function createWindow() {
     minHeight: 360,
     resizable: true,
     title: 'Paper Reviewer',
+    icon: APP_ICON_PATH,
     backgroundColor: '#fbf7ff',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -132,6 +139,20 @@ async function reviewStatePath(filePath) {
 function defaultOutputPath(sourcePath, suffix, extension) {
   const parsed = path.parse(sourcePath || path.join(app.getPath('documents'), 'manuscript.pdf'));
   return path.join(parsed.dir, `${parsed.name}${suffix}${extension}`);
+}
+
+function imageTypeForPath(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension === '.jpg' || extension === '.jpeg') return 'image/jpeg';
+  if (extension === '.webp') return 'image/webp';
+  if (extension === '.gif') return 'image/gif';
+  return 'image/png';
+}
+
+function bufferFromDataUrl(dataUrl) {
+  const match = String(dataUrl || '').match(/^data:image\/(?:png|jpe?g|webp|gif);base64,(.+)$/i);
+  if (!match) return null;
+  return Buffer.from(match[1], 'base64');
 }
 
 function annotationColor(annotation) {
@@ -302,6 +323,25 @@ ipcMain.handle('pdf:open', async () => {
   };
 });
 
+ipcMain.handle('image:open', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Insert image into review notes',
+    properties: ['openFile'],
+    filters: [{ name: 'Image files', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) return null;
+
+  const filePath = result.filePaths[0];
+  const bytes = await fs.readFile(filePath);
+  return {
+    path: filePath,
+    name: path.basename(filePath),
+    type: imageTypeForPath(filePath),
+    bytes: Array.from(bytes),
+  };
+});
+
 ipcMain.handle('pdf:read', async (_event, payload) => {
   const sourcePath = payload?.sourcePath;
   if (!sourcePath) throw new Error('No source PDF path was provided.');
@@ -346,8 +386,24 @@ ipcMain.handle('summary:save', async (_event, payload) => {
 
   if (result.canceled || !result.filePath) return null;
 
-  await fs.writeFile(result.filePath, payload.markdown || '', 'utf8');
-  return { path: result.filePath };
+  const parsed = path.parse(result.filePath);
+  const assetDirName = `${parsed.name}-assets`;
+  const assetDirPath = path.join(parsed.dir, assetDirName);
+  const assets = Array.isArray(payload.assets) ? payload.assets : [];
+  let markdown = String(payload.markdown || '').replaceAll(`${SUMMARY_ASSET_DIR_PLACEHOLDER}/`, `${assetDirName}/`);
+
+  if (assets.length > 0) {
+    await fs.mkdir(assetDirPath, { recursive: true });
+    await Promise.all(assets.map(async (asset, index) => {
+      const safeName = path.basename(asset.filename || `note-image-${index + 1}.png`);
+      const buffer = bufferFromDataUrl(asset.dataUrl);
+      if (!buffer) return;
+      await fs.writeFile(path.join(assetDirPath, safeName), buffer);
+    }));
+  }
+
+  await fs.writeFile(result.filePath, markdown, 'utf8');
+  return { path: result.filePath, assetDir: assets.length > 0 ? assetDirPath : null };
 });
 
 ipcMain.handle('review:load', async (_event, payload) => {

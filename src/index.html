@@ -8,9 +8,12 @@
 </head>
 <body>
   <header class="app-header">
-    <div>
-      <h1>Paper Reviewer</h1>
-      <p>Attention is all you need.</p>
+    <div class="brand-lockup">
+      <img class="brand-portrait" src="assets/author-thinker-portrait.png" alt="" />
+      <div>
+        <h1>Paper Reviewer</h1>
+        <p>Attention is all you need.</p>
+      </div>
     </div>
     <div class="header-actions">
       <button id="preview-mode-button" type="button">Preview Companion</button>
@@ -93,6 +96,7 @@
         <div class="preview-companion-actions">
           <button id="companion-open-preview-button" class="primary-button" type="button">Open in Preview</button>
           <button id="companion-reload-pdf-button" type="button">Reload PDF</button>
+          <button id="hide-preview-panel-button" class="quiet-button" type="button">Hide this panel</button>
         </div>
       </section>
 
@@ -133,6 +137,53 @@
           <h2>Review Notes</h2>
           <p class="panel-note">Write freely. Linked PDF selections will appear on this page.</p>
         </div>
+        <div class="panel-actions">
+          <button id="toggle-metadata-panel-button" class="quiet-button" type="button" aria-expanded="true">Hide metadata</button>
+          <button id="add-review-page-button" type="button">Add page</button>
+        </div>
+      </div>
+
+      <div class="notes-format-toolbar" aria-label="Review note formatting">
+        <button class="format-button" data-command="bold" type="button" title="Bold" aria-label="Bold"><strong>B</strong></button>
+        <button class="format-button" data-command="italic" type="button" title="Italic" aria-label="Italic"><em>I</em></button>
+        <button class="format-button" data-command="underline" type="button" title="Underline" aria-label="Underline"><span class="toolbar-underline">U</span></button>
+        <button class="format-button" data-command="strikeThrough" type="button" title="Strikethrough" aria-label="Strikethrough"><span class="toolbar-strike">S</span></button>
+        <label class="format-select" for="notes-block-style">
+          <span class="sr-only">Text style</span>
+          <select id="notes-block-style" aria-label="Text style">
+            <option value="P">Paragraph</option>
+            <option value="H2">Heading</option>
+            <option value="BLOCKQUOTE">Quote</option>
+            <option value="PRE">Code</option>
+          </select>
+        </label>
+        <label class="format-select" for="notes-text-size">
+          <span class="sr-only">Text size</span>
+          <select id="notes-text-size" aria-label="Text size">
+            <option value="">Size</option>
+            <option value="small">Small</option>
+            <option value="normal">Normal</option>
+            <option value="large">Large</option>
+            <option value="x-large">XL</option>
+          </select>
+        </label>
+        <label class="format-color" for="notes-text-color" title="Text color">
+          <span class="sr-only">Text color</span>
+          <input id="notes-text-color" type="color" value="#291b34" aria-label="Text color" />
+        </label>
+        <div class="text-color-presets" aria-label="Default text colors">
+          <button class="text-color-option" data-text-color="#291b34" type="button" title="Ink" aria-label="Ink"></button>
+          <button class="text-color-option" data-text-color="#7b6688" type="button" title="Muted" aria-label="Muted"></button>
+          <button class="text-color-option" data-text-color="#d94b55" type="button" title="Red" aria-label="Red"></button>
+          <button class="text-color-option" data-text-color="#4f8fdc" type="button" title="Blue" aria-label="Blue"></button>
+          <button class="text-color-option" data-text-color="#4f9f63" type="button" title="Green" aria-label="Green"></button>
+          <button class="text-color-option" data-text-color="#8d52d9" type="button" title="Purple" aria-label="Purple"></button>
+        </div>
+        <label class="format-color" for="notes-highlight-color" title="Highlight color">
+          <span class="sr-only">Highlight color</span>
+          <input id="notes-highlight-color" type="color" value="#fff0a8" aria-label="Highlight color" />
+        </label>
+        <button id="insert-note-image-button" type="button">Insert image</button>
       </div>
 
       <div class="review-page-shell">

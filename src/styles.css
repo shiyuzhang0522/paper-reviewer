@@ -108,6 +108,24 @@ label span,
   border-bottom: 1px solid var(--border);
 }
 
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.brand-portrait {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  border: 2px solid #f1d7ec;
+  border-radius: 12px;
+  object-fit: cover;
+  background: white;
+  box-shadow: 0 8px 24px rgba(75, 31, 92, 0.14);
+}
+
 .app-header h1 {
   margin: 0 0 2px;
   font-size: 1.35rem;
@@ -136,6 +154,10 @@ main {
 
 body.preview-companion main {
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+}
+
+body.preview-panel-hidden main {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .panel-header {
@@ -187,6 +209,10 @@ body.preview-companion .viewer-panel .pdf-viewer {
 body.preview-companion .comment-panel {
   padding: 12px;
   min-width: 0;
+}
+
+body.preview-panel-hidden .viewer-panel {
+  display: none;
 }
 
 .split-resizer {
@@ -424,6 +450,13 @@ body.preview-companion .preview-companion-panel {
   background: #f1e8f7;
 }
 
+.pdf-viewer.is-dragover,
+.review-page-shell.is-dragover {
+  border-color: var(--focus);
+  background: #fff0fa;
+  box-shadow: inset 0 0 0 2px rgba(217, 79, 163, 0.2);
+}
+
 .pdf-empty-state {
   display: grid;
   place-items: center;
@@ -580,6 +613,79 @@ body.preview-companion .preview-companion-panel {
   margin-top: 0;
 }
 
+.notes-format-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  box-shadow: 0 8px 18px rgba(75, 31, 92, 0.08);
+}
+
+.format-button {
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
+}
+
+.toolbar-underline {
+  text-decoration: underline;
+}
+
+.toolbar-strike {
+  text-decoration: line-through;
+}
+
+.format-select {
+  min-width: 108px;
+}
+
+.format-color {
+  width: 38px;
+  height: 32px;
+}
+
+.format-color input {
+  width: 100%;
+  height: 100%;
+  min-height: 32px;
+  padding: 2px;
+  cursor: pointer;
+}
+
+.text-color-presets {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+}
+
+.text-color-option {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--preset-color);
+}
+
+.text-color-option:hover,
+.text-color-option:focus-visible {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 2px rgba(217, 79, 163, 0.16);
+}
+
 .review-page-shell {
   flex: 1;
   min-height: 0;
@@ -612,6 +718,96 @@ body.preview-companion .preview-companion-panel {
 
 .review-draft p {
   margin: 0 0 1rem;
+}
+
+.review-page-break {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 28px -18px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.review-page-break::before,
+.review-page-break::after {
+  content: "";
+  flex: 1;
+  border-top: 1px dashed #d8bddf;
+}
+
+.review-draft h2 {
+  margin: 1.2rem 0 0.6rem;
+  font-size: 1.35rem;
+  line-height: 1.3;
+}
+
+.review-draft blockquote {
+  margin: 0 0 1rem;
+  padding-left: 12px;
+  border-left: 4px solid rgba(157, 60, 201, 0.28);
+  color: #4d3a57;
+}
+
+.review-draft pre {
+  white-space: pre-wrap;
+  margin: 0 0 1rem;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f5f0f8;
+  color: #34223f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9rem;
+}
+
+.review-draft .text-size-small {
+  font-size: 0.88rem;
+}
+
+.review-draft .text-size-normal {
+  font-size: 1rem;
+}
+
+.review-draft .text-size-large {
+  font-size: 1.18rem;
+}
+
+.review-draft .text-size-x-large {
+  font-size: 1.38rem;
+}
+
+.review-image-figure {
+  margin: 14px 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fffafd;
+}
+
+.review-image-figure img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: white;
+}
+
+.review-image-figure figcaption {
+  min-height: 1.4rem;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.review-image-figure figcaption:empty::before {
+  content: "Add caption";
+  color: #ad9ab7;
 }
 
 .review-linked-note {

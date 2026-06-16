@@ -2,6 +2,7 @@ const TAGS = ['Strength', 'Weakness', 'Question', 'Suggestion'];
 const SECTIONS = ['Abstract', 'Introduction', 'Methods', 'Results', 'Discussion', 'Summary', 'Writing', 'Overall'];
 const MARK_TYPES = ['highlight', 'underline'];
 const MARK_COLORS = ['pink', 'purple', 'yellow', 'green', 'blue', 'orange', 'red'];
+const TEXT_COLOR_PRESETS = ['#291b34', '#7b6688', '#d94b55', '#4f8fdc', '#4f9f63', '#8d52d9'];
 const MIN_SCALE = 0.7;
 const MAX_SCALE = 1.8;
 const SCALE_STEP = 0.15;
@@ -11,6 +12,19 @@ const MAX_HIGHLIGHT_RECT_HEIGHT = 0.035;
 const MAX_HIGHLIGHT_RECT_WIDTH = 0.92;
 const MAX_HIGHLIGHT_RECT_AREA = 0.025;
 const SPLIT_STORAGE_KEY = 'paper-reviewer:split-percent';
+const MAX_NOTE_IMAGE_DIMENSION = 1600;
+const NOTE_IMAGE_JPEG_QUALITY = 0.86;
+const SUMMARY_ASSET_DIR_PLACEHOLDER = 'review-summary-assets';
+const ALLOWED_REVIEW_TAGS = new Set([
+  'A', 'ARTICLE', 'B', 'BLOCKQUOTE', 'BR', 'DIV', 'EM', 'FIGCAPTION', 'FIGURE', 'H2', 'I', 'IMG',
+  'LI', 'OL', 'P', 'PRE', 'S', 'SPAN', 'STRIKE', 'STRONG', 'SUB', 'SUP', 'U', 'UL',
+]);
+const ALLOWED_REVIEW_CLASSES = new Set([
+  'review-linked-note', 'review-linked-note-meta', 'review-linked-note-comment',
+  'review-image-figure', 'review-page-break', 'text-size-small', 'text-size-normal', 'text-size-large', 'text-size-x-large',
+  'mark-highlight', 'mark-underline', 'mark-pink', 'mark-purple', 'mark-yellow', 'mark-green',
+  'mark-blue', 'mark-orange', 'mark-red', 'is-focused',
+]);
 const api = window.paperReviewerAPI || null;
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdfjs/pdf.worker.min.js';
@@ -20,6 +34,7 @@ const openPreviewButton = document.getElementById('open-preview-button');
 const companionOpenPreviewButton = document.getElementById('companion-open-preview-button');
 const reloadPdfButton = document.getElementById('reload-pdf-button');
 const companionReloadPdfButton = document.getElementById('companion-reload-pdf-button');
+const hidePreviewPanelButton = document.getElementById('hide-preview-panel-button');
 const previewModeButton = document.getElementById('preview-mode-button');
 const togglePaperControlsButton = document.getElementById('toggle-paper-controls-button');
 const pdfInput = document.getElementById('pdf-input');
@@ -32,6 +47,7 @@ const selectionMenu = document.getElementById('selection-menu');
 const addNoteButton = document.getElementById('add-note-button');
 const markPdfButton = document.getElementById('mark-pdf-button');
 const reviewDraftEditor = document.getElementById('review-draft');
+const reviewPageShell = document.querySelector('.review-page-shell');
 const statusMessage = document.getElementById('status-message');
 const prevPageButton = document.getElementById('prev-page-button');
 const nextPageButton = document.getElementById('next-page-button');
@@ -62,6 +78,16 @@ const copySummaryButton = document.getElementById('copy-summary-button');
 const closeSummaryButton = document.getElementById('close-summary-button');
 const dismissSummaryButton = document.getElementById('dismiss-summary-button');
 const copyStatus = document.getElementById('copy-status');
+const formatButtons = document.querySelectorAll('.format-button');
+const metadataPanel = document.querySelector('.metadata-panel');
+const toggleMetadataPanelButton = document.getElementById('toggle-metadata-panel-button');
+const addReviewPageButton = document.getElementById('add-review-page-button');
+const notesBlockStyle = document.getElementById('notes-block-style');
+const notesTextSize = document.getElementById('notes-text-size');
+const notesTextColor = document.getElementById('notes-text-color');
+const notesHighlightColor = document.getElementById('notes-highlight-color');
+const textColorPresetButtons = document.querySelectorAll('.text-color-option');
+const insertNoteImageButton = document.getElementById('insert-note-image-button');
 
 const metadataInputs = {
   title: document.getElementById('metadata-title'),
@@ -87,6 +113,8 @@ let currentPage = 1;
 let scale = 1;
 let paperControlsCollapsed = false;
 let previewCompanionMode = false;
+let previewPanelHidden = false;
+let metadataPanelCollapsed = false;
 let splitPercent = Number(localStorage.getItem(SPLIT_STORAGE_KEY)) || 50;
 let pendingSelection = null;
 let clearReviewPending = false;
@@ -234,6 +262,8 @@ function reviewState() {
     scale,
     paperControlsCollapsed,
     previewCompanionMode,
+    previewPanelHidden,
+    metadataPanelCollapsed,
     splitPercent,
   };
 }
@@ -281,11 +311,36 @@ function setPaperControlsCollapsed(collapsed, { persist = true } = {}) {
   if (persist) saveState();
 }
 
+function setMetadataPanelCollapsed(collapsed, { persist = true } = {}) {
+  metadataPanelCollapsed = Boolean(collapsed);
+  metadataPanel?.classList.toggle('hidden', metadataPanelCollapsed);
+  toggleMetadataPanelButton.textContent = metadataPanelCollapsed ? 'Show metadata' : 'Hide metadata';
+  toggleMetadataPanelButton.setAttribute('aria-expanded', String(!metadataPanelCollapsed));
+  if (persist) saveState();
+}
+
+function updatePreviewModeButton() {
+  if (previewCompanionMode && previewPanelHidden) {
+    previewModeButton.textContent = 'Show Preview Panel';
+  } else {
+    previewModeButton.textContent = previewCompanionMode ? 'Show Paper Panel' : 'Preview Companion';
+  }
+  previewModeButton.classList.toggle('primary-button', previewCompanionMode);
+}
+
+function setPreviewPanelHidden(hidden, { persist = true } = {}) {
+  previewPanelHidden = Boolean(hidden) && previewCompanionMode;
+  document.body.classList.toggle('preview-panel-hidden', previewCompanionMode && previewPanelHidden);
+  updatePreviewModeButton();
+  if (persist) saveState();
+}
+
 function setPreviewCompanionMode(enabled, { persist = true, tile = false } = {}) {
   previewCompanionMode = Boolean(enabled);
+  if (!previewCompanionMode) previewPanelHidden = false;
   document.body.classList.toggle('preview-companion', previewCompanionMode);
-  previewModeButton.textContent = previewCompanionMode ? 'Show Paper Panel' : 'Preview Companion';
-  previewModeButton.classList.toggle('primary-button', previewCompanionMode);
+  document.body.classList.toggle('preview-panel-hidden', previewCompanionMode && previewPanelHidden);
+  updatePreviewModeButton();
   closeMenu();
   closeEditor();
   if (persist) saveState();
@@ -355,12 +410,12 @@ function updatePageStatus() {
 }
 
 function updateReviewDraftState() {
-  reviewDraft = reviewDraftEditor.innerHTML;
+  reviewDraft = sanitizeReviewHtml(reviewDraftEditor.innerHTML);
   reviewDraftEditor.classList.toggle('is-empty', !reviewDraftEditor.textContent.trim());
 }
 
 function renderReviewDraft() {
-  reviewDraftEditor.innerHTML = reviewDraft || '';
+  reviewDraftEditor.innerHTML = sanitizeReviewHtml(reviewDraft || '');
   reviewDraftEditor.classList.toggle('is-empty', !reviewDraftEditor.textContent.trim());
 }
 
@@ -402,6 +457,343 @@ function insertNodeIntoReviewDraft(node) {
   setCursorAfter(node);
 }
 
+function setReviewRangeFromPoint(clientX, clientY) {
+  const range = document.caretRangeFromPoint
+    ? document.caretRangeFromPoint(clientX, clientY)
+    : document.caretPositionFromPoint?.(clientX, clientY);
+  if (!range) return false;
+
+  const nextRange = document.createRange();
+  if ('offsetNode' in range) {
+    nextRange.setStart(range.offsetNode, range.offset);
+  } else {
+    nextRange.setStart(range.startContainer, range.startOffset);
+  }
+  nextRange.collapse(true);
+  if (!reviewDraftEditor.contains(nextRange.commonAncestorContainer)) return false;
+
+  lastReviewRange = nextRange;
+  return true;
+}
+
+function createReviewPageBreak() {
+  const pageBreak = document.createElement('div');
+  pageBreak.className = 'review-page-break';
+  pageBreak.contentEditable = 'false';
+  pageBreak.textContent = 'Page break';
+  return pageBreak;
+}
+
+function addReviewPage() {
+  const pageBreak = createReviewPageBreak();
+  const spacer = document.createElement('p');
+  spacer.innerHTML = '<br>';
+  insertNodeIntoReviewDraft(pageBreak);
+  insertNodeIntoReviewDraft(spacer);
+  setCursorAfter(spacer);
+  updateReviewDraftState();
+  saveState();
+}
+
+function insertFragmentIntoReviewDraft(fragment) {
+  const nodes = Array.from(fragment.childNodes);
+  nodes.forEach((node) => insertNodeIntoReviewDraft(node));
+  if (nodes.length) setCursorAfter(nodes[nodes.length - 1]);
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function isAllowedCssColor(value) {
+  return /^#[0-9a-f]{6}$/i.test(value)
+    || /^rgb(a)?\(\s*[\d.]+%?\s*,\s*[\d.]+%?\s*,\s*[\d.]+%?(?:\s*,\s*(0|1|0?\.\d+))?\s*\)$/i.test(value);
+}
+
+function cleanInlineStyle(styleText) {
+  const source = document.createElement('span');
+  source.setAttribute('style', styleText || '');
+  const clean = {};
+  ['color', 'backgroundColor'].forEach((property) => {
+    const value = source.style[property];
+    if (value && isAllowedCssColor(value)) clean[property] = value;
+  });
+  if (['0.88rem', '1.18rem', '1.38rem'].includes(source.style.fontSize)) {
+    clean.fontSize = source.style.fontSize;
+  }
+  return clean;
+}
+
+function sanitizeReviewNode(node) {
+  if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent || '');
+  if (node.nodeType !== Node.ELEMENT_NODE) return document.createTextNode('');
+
+  const tagName = node.tagName.toUpperCase();
+  if (tagName === 'SCRIPT' || tagName === 'STYLE') return document.createTextNode('');
+  const cleanTag = ALLOWED_REVIEW_TAGS.has(tagName) ? tagName.toLowerCase() : 'span';
+  const clean = document.createElement(cleanTag);
+
+  const classes = Array.from(node.classList || []).filter((name) => ALLOWED_REVIEW_CLASSES.has(name));
+  if (classes.length) clean.className = classes.join(' ');
+  if (node.dataset?.annotationId && cleanTag === 'article') clean.dataset.annotationId = node.dataset.annotationId;
+  if (node.getAttribute('contenteditable') === 'false') clean.contentEditable = 'false';
+
+  if (cleanTag === 'a') {
+    const href = node.getAttribute('href') || '';
+    if (/^https?:\/\//i.test(href) || href.startsWith('mailto:')) {
+      clean.href = href;
+      clean.rel = 'noreferrer';
+    }
+  }
+
+  if (cleanTag === 'img') {
+    const src = node.getAttribute('src') || '';
+    if (src.startsWith('data:image/')) clean.src = src;
+    clean.alt = (node.getAttribute('alt') || '').slice(0, 200);
+  }
+
+  const styles = cleanInlineStyle(node.getAttribute('style'));
+  Object.entries(styles).forEach(([property, value]) => {
+    clean.style[property] = value;
+  });
+
+  Array.from(node.childNodes).forEach((child) => {
+    const sanitized = sanitizeReviewNode(child);
+    if (sanitized.textContent || sanitized.nodeType === Node.ELEMENT_NODE) clean.appendChild(sanitized);
+  });
+
+  return clean;
+}
+
+function sanitizeReviewHtml(html) {
+  const template = document.createElement('template');
+  template.innerHTML = html || '';
+  const fragment = document.createDocumentFragment();
+  Array.from(template.content.childNodes).forEach((node) => fragment.appendChild(sanitizeReviewNode(node)));
+  const wrapper = document.createElement('div');
+  wrapper.appendChild(fragment);
+  return wrapper.innerHTML;
+}
+
+function restoreReviewSelection() {
+  reviewDraftEditor.focus();
+  if (!lastReviewRange || !reviewDraftEditor.contains(lastReviewRange.commonAncestorContainer)) return;
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(lastReviewRange);
+}
+
+function execReviewCommand(command, value = null) {
+  restoreReviewSelection();
+  document.execCommand(command, false, value);
+  scheduleReviewDraftSave();
+  saveReviewRange();
+}
+
+function applyTextSize(size) {
+  restoreReviewSelection();
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  const range = selection.getRangeAt(0);
+  if (!reviewDraftEditor.contains(range.commonAncestorContainer)) return;
+
+  const className = size ? `text-size-${size}` : '';
+  if (!className) return;
+  const span = document.createElement('span');
+  span.className = className;
+
+  if (range.collapsed) {
+    span.appendChild(document.createTextNode('\u200b'));
+    range.insertNode(span);
+    range.setStart(span.firstChild, 1);
+    range.collapse(true);
+  } else {
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
+    range.selectNodeContents(span);
+    range.collapse(false);
+  }
+
+  selection.removeAllRanges();
+  selection.addRange(range);
+  saveReviewRange();
+  scheduleReviewDraftSave();
+}
+
+function formatBlock(tagName) {
+  execReviewCommand('formatBlock', tagName);
+}
+
+function blockStyleForNode(node) {
+  const element = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  const block = element?.closest?.('pre, h2, blockquote, p');
+  if (!block || !reviewDraftEditor.contains(block)) return 'P';
+  return block.tagName.toUpperCase();
+}
+
+function updateNotesBlockStyle() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  const range = selection.getRangeAt(0);
+  if (!reviewDraftEditor.contains(range.commonAncestorContainer)) return;
+  notesBlockStyle.value = blockStyleForNode(range.commonAncestorContainer);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function isImageFile(file) {
+  return file?.type?.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file?.name || '');
+}
+
+function imageMimeTypeForName(name = '') {
+  if (/\.jpe?g$/i.test(name)) return 'image/jpeg';
+  if (/\.webp$/i.test(name)) return 'image/webp';
+  if (/\.gif$/i.test(name)) return 'image/gif';
+  return 'image/png';
+}
+
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = dataUrl;
+  });
+}
+
+async function normalizeNoteImage(dataUrl, mimeType = 'image/png') {
+  const image = await loadImage(dataUrl);
+  const scaleFactor = Math.min(1, MAX_NOTE_IMAGE_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scaleFactor));
+  const height = Math.max(1, Math.round(image.naturalHeight * scaleFactor));
+  const outputType = mimeType === 'image/png' || mimeType === 'image/webp' ? mimeType : 'image/jpeg';
+
+  if (scaleFactor === 1 && dataUrl.length < 1200000) return dataUrl;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  context.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL(outputType, NOTE_IMAGE_JPEG_QUALITY);
+}
+
+function createReviewImageFigure(dataUrl, alt = '') {
+  const figure = document.createElement('figure');
+  figure.className = 'review-image-figure';
+
+  const image = document.createElement('img');
+  image.src = dataUrl;
+  image.alt = alt;
+  image.contentEditable = 'false';
+
+  const caption = document.createElement('figcaption');
+  caption.contentEditable = 'true';
+
+  figure.append(image, caption);
+  return figure;
+}
+
+async function insertImageDataUrl(dataUrl, { name = 'Inserted image', mimeType = 'image/png' } = {}) {
+  const normalized = await normalizeNoteImage(dataUrl, mimeType);
+  const figure = createReviewImageFigure(normalized, name);
+  const spacer = document.createElement('p');
+  spacer.innerHTML = '<br>';
+  insertNodeIntoReviewDraft(figure);
+  insertNodeIntoReviewDraft(spacer);
+  setCursorAfter(spacer);
+  updateReviewDraftState();
+  saveState();
+}
+
+async function insertImageFile(file) {
+  if (!isImageFile(file)) return;
+  const dataUrl = await readFileAsDataUrl(file);
+  await insertImageDataUrl(dataUrl, { name: file.name || 'Inserted image', mimeType: file.type || imageMimeTypeForName(file.name) });
+}
+
+function dataUrlToAsset(dataUrl, index, caption = '') {
+  const match = dataUrl.match(/^data:(image\/(png|jpeg|jpg|webp|gif));base64,(.+)$/i);
+  if (!match) return null;
+  const extension = match[2].toLowerCase() === 'jpeg' ? 'jpg' : match[2].toLowerCase();
+  return {
+    filename: `note-image-${String(index).padStart(2, '0')}.${extension}`,
+    dataUrl,
+    caption,
+  };
+}
+
+function markdownEscape(text) {
+  return String(text || '').replace(/\[/g, '\\[').replace(/\]/g, '\\]');
+}
+
+function richReviewDraftAsMarkdown(assetDirName = SUMMARY_ASSET_DIR_PLACEHOLDER) {
+  const clone = reviewDraftEditor.cloneNode(true);
+  const assets = [];
+  const lines = [];
+
+  function appendText(text) {
+    const cleaned = text.replace(/\s+/g, ' ').trim();
+    if (cleaned) lines.push(cleaned, '');
+  }
+
+  Array.from(clone.childNodes).forEach((node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      appendText(node.textContent || '');
+      return;
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const element = node;
+    if (element.matches('.review-page-break')) {
+      lines.push('---', '');
+      return;
+    }
+
+    const image = element.matches('img') ? element : element.querySelector('img');
+    if (image?.src?.startsWith('data:image/')) {
+      const caption = element.querySelector('figcaption')?.textContent.trim() || image.alt || 'Review image';
+      const asset = dataUrlToAsset(image.src, assets.length + 1, caption);
+      if (asset) {
+        assets.push(asset);
+        lines.push(`![${markdownEscape(caption)}](${assetDirName}/${asset.filename})`, '');
+      }
+      return;
+    }
+
+    if (element.matches('h2')) {
+      const heading = element.textContent.replace(/\s+/g, ' ').trim();
+      if (heading) lines.push(`### ${heading}`, '');
+      return;
+    }
+
+    if (element.matches('blockquote')) {
+      const quote = element.textContent.replace(/\s+/g, ' ').trim();
+      if (quote) lines.push(`> ${quote}`, '');
+      return;
+    }
+
+    appendText(element.textContent || '');
+  });
+
+  return {
+    markdown: lines.join('\n').trimEnd(),
+    assets,
+  };
+}
+
 function createLinkedNoteBlock(annotation) {
   const block = document.createElement('article');
   block.className = `review-linked-note ${markClassForAnnotation(annotation)}`;
@@ -437,11 +829,7 @@ function insertLinkedNote(annotation) {
 }
 
 function reviewDraftAsText() {
-  const clone = reviewDraftEditor.cloneNode(true);
-  return Array.from(clone.childNodes)
-    .map((node) => node.textContent.replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
-    .join('\n\n');
+  return richReviewDraftAsMarkdown().markdown;
 }
 
 function openMenu(x, y) {
@@ -718,9 +1106,13 @@ function applySavedState(saved) {
   scale = saved.scale || 1;
   paperControlsCollapsed = Boolean(saved.paperControlsCollapsed);
   previewCompanionMode = Boolean(saved.previewCompanionMode);
+  previewPanelHidden = Boolean(saved.previewPanelHidden);
+  metadataPanelCollapsed = Boolean(saved.metadataPanelCollapsed);
   if (Number.isFinite(saved.splitPercent)) setSplitPercent(saved.splitPercent, { persist: false });
   setPaperControlsCollapsed(paperControlsCollapsed, { persist: false });
   setPreviewCompanionMode(previewCompanionMode, { persist: false });
+  setPreviewPanelHidden(previewPanelHidden, { persist: false });
+  setMetadataPanelCollapsed(metadataPanelCollapsed, { persist: false });
   setActiveTag(activeTag);
   setActiveSection(activeSection);
   setActiveMarkType(activeMarkType);
@@ -862,7 +1254,9 @@ async function clearReview() {
   currentPage = 1;
   scale = 1;
   setPreviewCompanionMode(false);
+  setPreviewPanelHidden(false);
   setPaperControlsCollapsed(false);
+  setMetadataPanelCollapsed(false);
   setSplitPercent(50);
   Object.keys(metadataInputs).forEach((key) => { metadataInputs[key].value = ''; });
   renderReviewDraft();
@@ -892,6 +1286,7 @@ function requestClearReview() {
 
 function generateMarkdownSummary() {
   syncAnnotationCommentsFromDraft();
+  const draft = richReviewDraftAsMarkdown();
   const lines = ['# Review Summary', ''];
   lines.push(`**Title:** ${metadata.title || 'Untitled manuscript'}`);
   lines.push(`**Authors:** ${metadata.authors || 'Not specified'}`);
@@ -899,17 +1294,16 @@ function generateMarkdownSummary() {
   lines.push(`**Date:** ${metadata.date || 'Not specified'}`);
   lines.push('');
 
-  const draftText = reviewDraftAsText();
-  if (draftText) {
+  if (draft.markdown) {
     lines.push('## Review Notes', '');
-    lines.push(draftText, '');
+    lines.push(draft.markdown, '');
   }
 
   const reviewAnnotations = annotations.filter((annotation) => annotation.trackInReview !== false);
 
   if (reviewAnnotations.length === 0) {
-    if (!draftText) lines.push('No notes yet.');
-    return lines.join('\n').trimEnd();
+    if (!draft.markdown) lines.push('No notes yet.');
+    return { markdown: lines.join('\n').trimEnd(), assets: draft.assets };
   }
 
   lines.push('## Linked Annotations', '');
@@ -923,11 +1317,11 @@ function generateMarkdownSummary() {
       lines.push(annotation.comment || 'No note added.', '');
     });
   });
-  return lines.join('\n').trimEnd();
+  return { markdown: lines.join('\n').trimEnd(), assets: draft.assets };
 }
 
 function openSummary() {
-  summaryOutput.value = generateMarkdownSummary();
+  summaryOutput.value = generateMarkdownSummary().markdown;
   copyStatus.textContent = '';
   summaryDialog.classList.remove('hidden');
   summaryOutput.focus();
@@ -939,12 +1333,12 @@ function closeSummary() {
 }
 
 async function saveSummaryToPath() {
-  const markdown = generateMarkdownSummary();
+  const { markdown, assets } = generateMarkdownSummary();
   if (!api) {
     copyStatus.textContent = 'Run the desktop app to save beside the PDF. Markdown is ready to copy.';
     return;
   }
-  const result = await api.saveSummary({ sourcePath: pdfPath, markdown });
+  const result = await api.saveSummary({ sourcePath: pdfPath, markdown, assets });
   copyStatus.textContent = result?.path ? `Saved to ${result.path}` : 'Summary save cancelled.';
 }
 
@@ -998,6 +1392,35 @@ async function openPdf() {
   pdfInput.click();
 }
 
+function isPdfFile(file) {
+  return file?.type === 'application/pdf' || /\.pdf$/i.test(file?.name || '');
+}
+
+async function loadPdfFile(file) {
+  if (!isPdfFile(file)) {
+    showStatus('Drop a PDF file into the manuscript panel.');
+    return false;
+  }
+
+  await loadPdfBytes(new Uint8Array(await file.arrayBuffer()), file.name, file.path || '');
+  showStatus(`Opened ${file.name}.`);
+  return true;
+}
+
+function droppedFiles(event) {
+  return Array.from(event.dataTransfer?.files || []);
+}
+
+function hasImageTransfer(event) {
+  const files = droppedFiles(event);
+  if (files.length > 0) return files.some(isImageFile);
+  return Array.from(event.dataTransfer?.items || []).some((item) => item.type?.startsWith('image/'));
+}
+
+function setDragActive(element, active) {
+  element?.classList.toggle('is-dragover', active);
+}
+
 async function reloadCurrentPdf() {
   if (!api || !pdfPath) return;
   try {
@@ -1040,13 +1463,47 @@ openPreviewButton.addEventListener('click', openInPreview);
 companionOpenPreviewButton.addEventListener('click', openInPreview);
 reloadPdfButton.addEventListener('click', reloadCurrentPdf);
 companionReloadPdfButton.addEventListener('click', reloadCurrentPdf);
-previewModeButton.addEventListener('click', () => setPreviewCompanionMode(!previewCompanionMode, { tile: true }));
+hidePreviewPanelButton.addEventListener('click', () => setPreviewPanelHidden(true));
+previewModeButton.addEventListener('click', () => {
+  if (previewCompanionMode && previewPanelHidden) {
+    setPreviewPanelHidden(false);
+    return;
+  }
+  setPreviewCompanionMode(!previewCompanionMode, { tile: true });
+});
 togglePaperControlsButton.addEventListener('click', () => setPaperControlsCollapsed(!paperControlsCollapsed));
 pdfInput.addEventListener('change', async () => {
   const file = pdfInput.files?.[0];
   if (!file) return;
-  await loadPdfBytes(new Uint8Array(await file.arrayBuffer()), file.name, '');
+  await loadPdfFile(file);
   pdfInput.value = '';
+});
+
+['dragenter', 'dragover'].forEach((eventName) => {
+  pdfViewer.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setDragActive(pdfViewer, true);
+  });
+});
+
+['dragleave', 'drop'].forEach((eventName) => {
+  pdfViewer.addEventListener(eventName, () => setDragActive(pdfViewer, false));
+});
+
+pdfViewer.addEventListener('drop', async (event) => {
+  event.preventDefault();
+  const files = droppedFiles(event);
+  if (files.length !== 1 || !isPdfFile(files[0])) {
+    showStatus('Drop one PDF file into the manuscript panel.');
+    return;
+  }
+
+  try {
+    await loadPdfFile(files[0]);
+  } catch {
+    showStatus('Could not open the dropped PDF.');
+  }
 });
 
 pdfViewer.addEventListener('mouseup', () => {
@@ -1112,6 +1569,8 @@ addNoteButton.addEventListener('click', () => {
   openEditor();
 });
 markPdfButton.addEventListener('click', markPdfOnly);
+toggleMetadataPanelButton.addEventListener('click', () => setMetadataPanelCollapsed(!metadataPanelCollapsed));
+addReviewPageButton.addEventListener('click', addReviewPage);
 
 tagButtons.forEach((button) => button.addEventListener('click', () => setActiveTag(button.dataset.tag)));
 colorButtons.forEach((button) => button.addEventListener('click', () => setActiveColor(button.dataset.color)));
@@ -1124,19 +1583,122 @@ Object.entries(metadataInputs).forEach(([key, input]) => {
 });
 sectionSelect.addEventListener('change', () => setActiveSection(sectionSelect.value));
 markTypeSelect.addEventListener('change', () => setActiveMarkType(markTypeSelect.value));
-reviewDraftEditor.addEventListener('input', scheduleReviewDraftSave);
-reviewDraftEditor.addEventListener('keyup', saveReviewRange);
-reviewDraftEditor.addEventListener('mouseup', saveReviewRange);
-reviewDraftEditor.addEventListener('focus', saveReviewRange);
+reviewDraftEditor.addEventListener('input', () => {
+  scheduleReviewDraftSave();
+  updateNotesBlockStyle();
+});
+reviewDraftEditor.addEventListener('keyup', () => {
+  saveReviewRange();
+  updateNotesBlockStyle();
+});
+reviewDraftEditor.addEventListener('mouseup', () => {
+  saveReviewRange();
+  updateNotesBlockStyle();
+});
+reviewDraftEditor.addEventListener('focus', () => {
+  saveReviewRange();
+  updateNotesBlockStyle();
+});
 reviewDraftEditor.addEventListener('click', (event) => {
   const linkedNote = event.target.closest('.review-linked-note');
   if (linkedNote?.dataset.annotationId) focusAnnotation(linkedNote.dataset.annotationId);
 });
 reviewDraftEditor.addEventListener('paste', (event) => {
   event.preventDefault();
+  const imageItem = Array.from(event.clipboardData?.items || []).find((item) => item.type.startsWith('image/'));
+  if (imageItem) {
+    insertImageFile(imageItem.getAsFile()).catch(() => showStatus('Could not insert the pasted image.'));
+    return;
+  }
+
+  const html = event.clipboardData?.getData('text/html') || '';
+  if (html) {
+    const template = document.createElement('template');
+    template.innerHTML = sanitizeReviewHtml(html);
+    const fragment = template.content.cloneNode(true);
+    insertFragmentIntoReviewDraft(fragment);
+    updateReviewDraftState();
+    saveState();
+    return;
+  }
+
   const text = event.clipboardData?.getData('text/plain') || '';
   document.execCommand('insertText', false, text);
 });
+formatButtons.forEach((button) => {
+  button.addEventListener('click', () => execReviewCommand(button.dataset.command));
+});
+notesBlockStyle.addEventListener('change', () => {
+  const tagName = notesBlockStyle.value;
+  formatBlock(tagName);
+  notesBlockStyle.value = tagName;
+});
+notesTextSize.addEventListener('change', () => {
+  applyTextSize(notesTextSize.value);
+  notesTextSize.value = '';
+});
+notesTextColor.addEventListener('input', () => execReviewCommand('foreColor', notesTextColor.value));
+notesHighlightColor.addEventListener('input', () => execReviewCommand('hiliteColor', notesHighlightColor.value));
+textColorPresetButtons.forEach((button) => {
+  const color = button.dataset.textColor;
+  button.style.setProperty('--preset-color', color);
+  button.addEventListener('click', () => {
+    if (!TEXT_COLOR_PRESETS.includes(color)) return;
+    notesTextColor.value = color;
+    execReviewCommand('foreColor', color);
+  });
+});
+insertNoteImageButton.addEventListener('click', async () => {
+  try {
+    if (api?.openImage) {
+      const result = await api.openImage();
+      if (!result) return;
+      const bytes = new Uint8Array(result.bytes);
+      await insertImageDataUrl(`data:${result.type};base64,${bytesToBase64(bytes)}`, {
+        name: result.name,
+        mimeType: result.type,
+      });
+      return;
+    }
+
+    showStatus('Run the desktop app to insert image files.');
+  } catch {
+    showStatus('Could not insert that image.');
+  }
+});
+
+[reviewPageShell, reviewDraftEditor].forEach((dropTarget) => {
+  ['dragenter', 'dragover'].forEach((eventName) => {
+    dropTarget?.addEventListener(eventName, (event) => {
+      if (!hasImageTransfer(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      setDragActive(reviewPageShell, true);
+    });
+  });
+
+  ['dragleave', 'drop'].forEach((eventName) => {
+    dropTarget?.addEventListener(eventName, () => setDragActive(reviewPageShell, false));
+  });
+});
+
+reviewPageShell?.addEventListener('drop', async (event) => {
+  const images = droppedFiles(event).filter(isImageFile);
+  if (images.length === 0) return;
+
+  event.preventDefault();
+  setReviewRangeFromPoint(event.clientX, event.clientY);
+
+  try {
+    for (const image of images) {
+      await insertImageFile(image);
+    }
+    showStatus(images.length === 1 ? 'Inserted dropped image into the review note.' : `Inserted ${images.length} dropped images into the review note.`);
+  } catch {
+    showStatus('Could not insert the dropped image.');
+  }
+});
+
 prevPageButton.addEventListener('click', () => pdfDocument && scrollToPage(Math.max(1, currentPage - 1)));
 nextPageButton.addEventListener('click', () => pdfDocument && scrollToPage(Math.min(pdfDocument.numPages, currentPage + 1)));
 zoomOutButton.addEventListener('click', () => setScale(scale - SCALE_STEP));
@@ -1209,6 +1771,7 @@ window.addEventListener('focus', () => {
 setSplitPercent(splitPercent, { persist: false });
 setPaperControlsCollapsed(paperControlsCollapsed, { persist: false });
 setPreviewCompanionMode(previewCompanionMode, { persist: false });
+setMetadataPanelCollapsed(metadataPanelCollapsed, { persist: false });
 setActiveTag(activeTag);
 setActiveSection(activeSection);
 setActiveMarkType(activeMarkType);
