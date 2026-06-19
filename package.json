@@ -1,6 +1,6 @@
 {
   "name": "paper-reviewer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Installable PDF manuscript reviewer with linked notes and exported summaries.",
   "author": "Paper Reviewer",
   "main": "electron/main.js",

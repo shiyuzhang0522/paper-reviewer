@@ -14,12 +14,14 @@ As a manuscript reviewer, I want to read a PDF and write structured notes beside
 - Tags: `Strength`, `Weakness`, `Question`, `Suggestion`
 - Direct save into the original PDF
 - Markdown review-summary export
+- Editable Markdown summary import
+- Structured final assessment with a 1–10 novelty score
 
 ## UI layout
 
 - Left half: PDF manuscript
 - Right half: same-height review sheets for each PDF page
-- Header: open PDF, save to original PDF, clear review, review summary
+- Header: open PDF, open summary, save to original PDF, clear review, finish review
 - Selection menu: quick entry point for a linked note
 
 ## Save model
@@ -28,6 +30,9 @@ As a manuscript reviewer, I want to read a PDF and write structured notes beside
 - App review state is stored by PDF path for fast reloads.
 - PDF annotations are written back to the original file with an atomic temp-file replace.
 - Existing Paper Reviewer annotations are removed before writing the current set to prevent duplicate highlights.
+- Final assessment answers are stored with the local review state.
+- Exported v0.2 summaries include a format marker and stable headings for reliable import.
+- Markdown import replaces metadata, notes, and assessment after confirmation while preserving current PDF marks.
 
 ## Future improvements
 

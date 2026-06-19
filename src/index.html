@@ -16,10 +16,11 @@
       </div>
     </div>
     <div class="header-actions">
+      <button id="open-summary-button" type="button">Open Summary</button>
       <button id="preview-mode-button" type="button">Preview Companion</button>
       <button id="clear-review-button" class="quiet-button" type="button">Clear review</button>
       <button id="save-pdf-button" type="button">Save to Original PDF</button>
-      <button id="summary-button" class="primary-button" type="button">Review Summary</button>
+      <button id="summary-button" class="primary-button" type="button">Finish Review</button>
     </div>
   </header>
 
@@ -264,13 +265,49 @@
     </div>
   </section>
 
-  <section id="summary-dialog" class="summary-dialog hidden" aria-label="Review summary">
-    <div class="summary-card">
+  <section id="summary-dialog" class="summary-dialog hidden" aria-label="Finish review">
+    <div class="summary-card finish-review-card">
       <div class="editor-header">
-        <h2>Review Summary</h2>
-        <button id="close-summary-button" class="icon-button" type="button" aria-label="Close review summary">x</button>
+        <div>
+          <h2>Finish Review</h2>
+          <p class="panel-note">Complete what is useful now. Unanswered questions remain visible in the summary.</p>
+        </div>
+        <button id="close-summary-button" class="icon-button" type="button" aria-label="Close finish review">x</button>
       </div>
-      <textarea id="summary-output" rows="16" readonly></textarea>
+      <div class="finish-review-layout">
+        <div class="assessment-form">
+          <label for="assessment-journal-fit">
+            <span>Journal suitability</span>
+            <textarea id="assessment-journal-fit" rows="4" placeholder="Does the manuscript deserve publication in this journal? If not, what journal would be more appropriate?"></textarea>
+          </label>
+          <label for="assessment-major-claims">
+            <span>Major claims</span>
+            <textarea id="assessment-major-claims" rows="4" placeholder="What are the major claims of the paper?"></textarea>
+          </label>
+          <div class="assessment-score-row">
+            <label for="assessment-novelty">
+              <span>Novelty and significant advance</span>
+              <textarea id="assessment-novelty" rows="4" placeholder="Are the claims novel, and do they represent a significant advance in the field?"></textarea>
+            </label>
+            <label for="assessment-novelty-score">
+              <span>Score (1–10)</span>
+              <input id="assessment-novelty-score" type="number" min="1" max="10" step="1" placeholder="—" />
+            </label>
+          </div>
+          <label for="assessment-convincing">
+            <span>Strength of evidence</span>
+            <textarea id="assessment-convincing" rows="4" placeholder="Is the work convincing? What further evidence would strengthen the conclusions?"></textarea>
+          </label>
+          <label for="assessment-influence">
+            <span>Influence and wider interest</span>
+            <textarea id="assessment-influence" rows="4" placeholder="Will the paper influence thinking in the field and interest a wider research community?"></textarea>
+          </label>
+        </div>
+        <label class="summary-preview" for="summary-output">
+          <span>Markdown preview</span>
+          <textarea id="summary-output" rows="24" readonly></textarea>
+        </label>
+      </div>
       <div class="form-actions">
         <button id="save-summary-button" type="button">Save summary</button>
         <button id="copy-summary-button" class="primary-button" type="button">Copy markdown</button>

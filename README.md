@@ -20,6 +20,8 @@ The app is built with Electron, PDF.js, and pdf-lib. It runs locally on your mac
 - Auto-fill editable manuscript metadata when possible: title, authors, journal, and date.
 - Save Paper Reviewer annotations directly into the original PDF.
 - Export a Markdown review summary and image assets.
+- Reopen exported Markdown summaries as editable reviews, including local note images when available.
+- Complete a structured final assessment with journal fit, major claims, novelty, evidence, influence, and a 1–10 novelty score.
 - Use Preview Companion mode to open the PDF in macOS Preview beside the review notes.
 
 ## Requirements
@@ -61,7 +63,8 @@ The build output is written to `dist/`. If a DMG is produced, open it and drag P
 4. Choose `Note` to create a linked review note, or `Mark PDF` to mark the PDF only.
 5. Write or edit your review in the notes panel.
 6. Use `Save to Original PDF` to write Paper Reviewer annotations back into the opened PDF.
-7. Use `Review Summary` to preview, copy, or save a Markdown summary.
+7. Use `Finish Review` to complete the final assessment, preview the combined summary, and copy or save it as Markdown.
+8. Use `Open Summary` to reopen a previously exported Markdown review for further editing.
 
 ## Review Notes
 
@@ -76,6 +79,12 @@ The review editor supports:
 - Page breaks for separating longer reviews.
 
 Images embedded in notes are stored in the local review state as data URLs. When you save a Markdown summary, image files are exported into a sibling assets folder.
+
+## Final Assessment And Summary Import
+
+`Finish Review` adds five optional assessment prompts covering journal suitability, major claims, novelty and significance, strength of evidence, and likely influence. Novelty can also be scored from 1 to 10. Incomplete answers are retained as drafts and shown as unanswered in the Markdown preview.
+
+`Open Summary` restores summaries exported by Paper Reviewer into editable metadata, notes, and assessment fields. Linked annotations are imported as editable note content because Markdown does not contain the PDF coordinates needed to recreate highlights. Any PDF marks already open in the app are left unchanged. Generic Markdown files can also be opened as editable review notes.
 
 ## PDF And Data Handling
 

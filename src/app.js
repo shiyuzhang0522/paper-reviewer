@@ -15,6 +15,8 @@ const SPLIT_STORAGE_KEY = 'paper-reviewer:split-percent';
 const MAX_NOTE_IMAGE_DIMENSION = 1600;
 const NOTE_IMAGE_JPEG_QUALITY = 0.86;
 const SUMMARY_ASSET_DIR_PLACEHOLDER = 'review-summary-assets';
+const SUMMARY_FORMAT_MARKER = '<!-- paper-reviewer-summary:v2 -->';
+const UNANSWERED_ASSESSMENT = '_Not answered._';
 const ALLOWED_REVIEW_TAGS = new Set([
   'A', 'ARTICLE', 'B', 'BLOCKQUOTE', 'BR', 'DIV', 'EM', 'FIGCAPTION', 'FIGURE', 'H2', 'I', 'IMG',
   'LI', 'OL', 'P', 'PRE', 'S', 'SPAN', 'STRIKE', 'STRONG', 'SUB', 'SUP', 'U', 'UL',
@@ -70,6 +72,7 @@ const saveAnnotationButton = document.getElementById('save-annotation-button');
 const cancelAnnotationButton = document.getElementById('cancel-annotation-button');
 const closeEditorButton = document.getElementById('close-editor-button');
 const summaryButton = document.getElementById('summary-button');
+const openSummaryButton = document.getElementById('open-summary-button');
 const saveSummaryButton = document.getElementById('save-summary-button');
 const clearReviewButton = document.getElementById('clear-review-button');
 const summaryDialog = document.getElementById('summary-dialog');
@@ -88,6 +91,14 @@ const notesTextColor = document.getElementById('notes-text-color');
 const notesHighlightColor = document.getElementById('notes-highlight-color');
 const textColorPresetButtons = document.querySelectorAll('.text-color-option');
 const insertNoteImageButton = document.getElementById('insert-note-image-button');
+const assessmentInputs = {
+  journalFit: document.getElementById('assessment-journal-fit'),
+  majorClaims: document.getElementById('assessment-major-claims'),
+  novelty: document.getElementById('assessment-novelty'),
+  noveltyScore: document.getElementById('assessment-novelty-score'),
+  convincing: document.getElementById('assessment-convincing'),
+  influence: document.getElementById('assessment-influence'),
+};
 
 const metadataInputs = {
   title: document.getElementById('metadata-title'),
@@ -105,6 +116,7 @@ let annotations = [];
 let metadata = createEmptyMetadata();
 let metadataEdited = {};
 let reviewDraft = '';
+let assessment = createEmptyAssessment();
 let activeTag = 'Strength';
 let activeSection = 'Summary';
 let activeMarkType = 'highlight';
@@ -131,6 +143,23 @@ let activeAnnotationId = null;
 
 function createEmptyMetadata() {
   return { title: '', authors: '', journal: '', date: '' };
+}
+
+function createEmptyAssessment() {
+  return {
+    journalFit: '',
+    majorClaims: '',
+    novelty: '',
+    noveltyScore: '',
+    convincing: '',
+    influence: '',
+  };
+}
+
+function normalizeNoveltyScore(value) {
+  if (value === '' || value === null || value === undefined) return '';
+  const score = Number(value);
+  return Number.isInteger(score) && score >= 1 && score <= 10 ? score : '';
 }
 
 function createId() {
@@ -246,14 +275,17 @@ function clearStatus() {
 }
 
 function reviewState() {
+  syncAssessmentFromInputs();
   syncAnnotationCommentsFromDraft();
   return {
+    stateVersion: 2,
     pdfName,
     pdfFingerprint,
     annotations,
     metadata,
     metadataEdited,
     reviewDraft,
+    assessment,
     activeTag,
     activeSection,
     activeMarkType,
@@ -396,6 +428,32 @@ function setMetadata(nextMetadata, { markEdited = false, overwriteEdited = false
     if (markEdited) metadataEdited[key] = true;
   });
   saveState();
+}
+
+function setAssessment(nextAssessment = {}, { persist = true } = {}) {
+  assessment = {
+    ...createEmptyAssessment(),
+    ...nextAssessment,
+    noveltyScore: normalizeNoveltyScore(nextAssessment.noveltyScore),
+  };
+
+  Object.entries(assessmentInputs).forEach(([key, input]) => {
+    input.value = assessment[key];
+  });
+
+  if (persist) saveState();
+}
+
+function syncAssessmentFromInputs() {
+  assessment = {
+    journalFit: assessmentInputs.journalFit.value.trim(),
+    majorClaims: assessmentInputs.majorClaims.value.trim(),
+    novelty: assessmentInputs.novelty.value.trim(),
+    noveltyScore: normalizeNoveltyScore(assessmentInputs.noveltyScore.value),
+    convincing: assessmentInputs.convincing.value.trim(),
+    influence: assessmentInputs.influence.value.trim(),
+  };
+  assessmentInputs.noveltyScore.value = assessment.noveltyScore;
 }
 
 function updatePageStatus() {
@@ -1068,6 +1126,7 @@ async function loadPdfBytes(bytes, name, sourcePath = '', { restoreState = true 
   metadata = createEmptyMetadata();
   metadataEdited = {};
   reviewDraft = '';
+  assessment = createEmptyAssessment();
   currentPage = 1;
   scale = 1;
 
@@ -1098,6 +1157,12 @@ function applySavedState(saved) {
   metadata = { ...createEmptyMetadata(), ...(saved.metadata || {}) };
   metadataEdited = saved.metadataEdited || {};
   reviewDraft = saved.reviewDraft || '';
+  assessment = {
+    ...createEmptyAssessment(),
+    ...(saved.assessment || {}),
+    noveltyScore: normalizeNoveltyScore(saved.assessment?.noveltyScore),
+  };
+  setAssessment(assessment, { persist: false });
   activeTag = normalizeTag(saved.activeTag);
   activeSection = normalizeSection(saved.activeSection);
   activeMarkType = normalizeMarkType(saved.activeMarkType);
@@ -1251,6 +1316,7 @@ async function clearReview() {
   metadata = createEmptyMetadata();
   metadataEdited = {};
   reviewDraft = '';
+  assessment = createEmptyAssessment();
   currentPage = 1;
   scale = 1;
   setPreviewCompanionMode(false);
@@ -1259,6 +1325,7 @@ async function clearReview() {
   setMetadataPanelCollapsed(false);
   setSplitPercent(50);
   Object.keys(metadataInputs).forEach((key) => { metadataInputs[key].value = ''; });
+  setAssessment(createEmptyAssessment(), { persist: false });
   renderReviewDraft();
   closeEditor();
   closeMenu();
@@ -1284,15 +1351,28 @@ function requestClearReview() {
   clearReviewTimer = setTimeout(resetClearReviewButton, 4000);
 }
 
+function assessmentAnswer(value) {
+  return String(value || '').trim() || UNANSWERED_ASSESSMENT;
+}
+
 function generateMarkdownSummary() {
+  syncAssessmentFromInputs();
   syncAnnotationCommentsFromDraft();
   const draft = richReviewDraftAsMarkdown();
-  const lines = ['# Review Summary', ''];
+  const lines = [SUMMARY_FORMAT_MARKER, '', '# Review Summary', ''];
   lines.push(`**Title:** ${metadata.title || 'Untitled manuscript'}`);
   lines.push(`**Authors:** ${metadata.authors || 'Not specified'}`);
   lines.push(`**Journal:** ${metadata.journal || 'Not specified'}`);
   lines.push(`**Date:** ${metadata.date || 'Not specified'}`);
   lines.push('');
+  lines.push('## Final Assessment', '');
+  lines.push('### 1. Journal Suitability', '', assessmentAnswer(assessment.journalFit), '');
+  lines.push('### 2. Major Claims', '', assessmentAnswer(assessment.majorClaims), '');
+  lines.push('### 3. Novelty and Significant Advance', '');
+  lines.push(`**Score:** ${assessment.noveltyScore ? `${assessment.noveltyScore}/10` : 'Not scored'}`, '');
+  lines.push(assessmentAnswer(assessment.novelty), '');
+  lines.push('### 4. Strength of Evidence', '', assessmentAnswer(assessment.convincing), '');
+  lines.push('### 5. Influence and Wider Interest', '', assessmentAnswer(assessment.influence), '');
 
   if (draft.markdown) {
     lines.push('## Review Notes', '');
@@ -1320,16 +1400,208 @@ function generateMarkdownSummary() {
   return { markdown: lines.join('\n').trimEnd(), assets: draft.assets };
 }
 
-function openSummary() {
+function refreshSummaryPreview() {
   summaryOutput.value = generateMarkdownSummary().markdown;
+}
+
+function openSummary() {
+  setAssessment(assessment, { persist: false });
+  refreshSummaryPreview();
   copyStatus.textContent = '';
   summaryDialog.classList.remove('hidden');
-  summaryOutput.focus();
-  summaryOutput.select();
+  assessmentInputs.journalFit.focus();
 }
 
 function closeSummary() {
+  syncAssessmentFromInputs();
+  saveState();
   summaryDialog.classList.add('hidden');
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function markdownSection(markdown, heading, followingHeadings = []) {
+  const startsAt = markdown.search(new RegExp(`^${escapeRegExp(heading)}\\s*$`, 'm'));
+  if (startsAt < 0) return '';
+  const contentStart = startsAt + markdown.slice(startsAt).indexOf('\n') + 1;
+  let contentEnd = markdown.length;
+
+  followingHeadings.forEach((nextHeading) => {
+    const relativeEnd = markdown.slice(contentStart).search(new RegExp(`^${escapeRegExp(nextHeading)}\\s*$`, 'm'));
+    if (relativeEnd >= 0) contentEnd = Math.min(contentEnd, contentStart + relativeEnd);
+  });
+
+  return markdown.slice(contentStart, contentEnd).trim();
+}
+
+function importedAnswer(markdown, heading, followingHeadings) {
+  const value = markdownSection(markdown, heading, followingHeadings).trim();
+  return value === UNANSWERED_ASSESSMENT ? '' : value;
+}
+
+function parsePaperReviewerSummary(markdown) {
+  const assessmentHeadings = [
+    '### 1. Journal Suitability',
+    '### 2. Major Claims',
+    '### 3. Novelty and Significant Advance',
+    '### 4. Strength of Evidence',
+    '### 5. Influence and Wider Interest',
+  ];
+  const noveltySection = markdownSection(markdown, assessmentHeadings[2], assessmentHeadings.slice(3).concat('## Review Notes', '## Linked Annotations'));
+  const scoreMatch = noveltySection.match(/^\*\*Score:\*\*\s*(\d{1,2})\/10\s*$/m);
+  const novelty = noveltySection
+    .replace(/^\*\*Score:\*\*.*$/m, '')
+    .trim();
+  const reviewNotes = markdownSection(markdown, '## Review Notes', ['## Linked Annotations']);
+  const linkedAnnotations = markdownSection(markdown, '## Linked Annotations');
+  const noteParts = [reviewNotes];
+  if (linkedAnnotations) noteParts.push(`## Imported Linked Annotations\n\n${linkedAnnotations}`);
+
+  const metadataValue = (label) => {
+    const match = markdown.match(new RegExp(`^\\*\\*${label}:\\*\\*\\s*(.*)$`, 'm'));
+    const value = match?.[1]?.trim() || '';
+    return ['Not specified', 'Untitled manuscript'].includes(value) ? '' : value;
+  };
+
+  return {
+    metadata: {
+      title: metadataValue('Title'),
+      authors: metadataValue('Authors'),
+      journal: metadataValue('Journal'),
+      date: metadataValue('Date'),
+    },
+    assessment: {
+      journalFit: importedAnswer(markdown, assessmentHeadings[0], assessmentHeadings.slice(1).concat('## Review Notes', '## Linked Annotations')),
+      majorClaims: importedAnswer(markdown, assessmentHeadings[1], assessmentHeadings.slice(2).concat('## Review Notes', '## Linked Annotations')),
+      novelty: novelty === UNANSWERED_ASSESSMENT ? '' : novelty,
+      noveltyScore: normalizeNoveltyScore(scoreMatch?.[1]),
+      convincing: importedAnswer(markdown, assessmentHeadings[3], assessmentHeadings.slice(4).concat('## Review Notes', '## Linked Annotations')),
+      influence: importedAnswer(markdown, assessmentHeadings[4], ['## Review Notes', '## Linked Annotations']),
+    },
+    notesMarkdown: noteParts.filter(Boolean).join('\n\n'),
+  };
+}
+
+function markdownToReviewHtml(markdown, importedAssets = []) {
+  const assetMap = new Map(importedAssets.map((asset) => [asset.reference, asset]));
+  const container = document.createElement('div');
+  const lines = String(markdown || '').replace(/\r\n/g, '\n').split('\n');
+  let paragraphLines = [];
+  let codeLines = [];
+  let inCodeBlock = false;
+
+  const flushParagraph = () => {
+    if (paragraphLines.length === 0) return;
+    const paragraph = document.createElement('p');
+    paragraph.textContent = paragraphLines.join(' ').trim();
+    if (paragraph.textContent) container.appendChild(paragraph);
+    paragraphLines = [];
+  };
+
+  const flushCode = () => {
+    const pre = document.createElement('pre');
+    pre.textContent = codeLines.join('\n');
+    container.appendChild(pre);
+    codeLines = [];
+  };
+
+  lines.forEach((line) => {
+    if (/^```/.test(line.trim())) {
+      flushParagraph();
+      if (inCodeBlock) flushCode();
+      inCodeBlock = !inCodeBlock;
+      return;
+    }
+    if (inCodeBlock) {
+      codeLines.push(line);
+      return;
+    }
+    if (!line.trim()) {
+      flushParagraph();
+      return;
+    }
+
+    const imageMatch = line.trim().match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)$/);
+    if (imageMatch) {
+      flushParagraph();
+      const asset = assetMap.get(imageMatch[2]);
+      if (asset?.dataUrl) container.appendChild(createReviewImageFigure(asset.dataUrl, imageMatch[1] || asset.name));
+      else paragraphLines.push(`[Image unavailable: ${imageMatch[1] || imageMatch[2]}]`);
+      return;
+    }
+
+    const headingMatch = line.match(/^#{1,6}\s+(.+)$/);
+    if (headingMatch) {
+      flushParagraph();
+      const heading = document.createElement('h2');
+      heading.textContent = headingMatch[1];
+      container.appendChild(heading);
+      return;
+    }
+
+    if (/^>\s?/.test(line)) {
+      flushParagraph();
+      const quote = document.createElement('blockquote');
+      quote.textContent = line.replace(/^>\s?/, '');
+      container.appendChild(quote);
+      return;
+    }
+
+    paragraphLines.push(line.replace(/^[-*+]\s+/, '• '));
+  });
+
+  if (inCodeBlock || codeLines.length) flushCode();
+  flushParagraph();
+  return sanitizeReviewHtml(container.innerHTML);
+}
+
+function hasCurrentReviewContent() {
+  return Boolean(
+    reviewDraftEditor.textContent.trim()
+    || Object.values(metadata).some((value) => String(value || '').trim())
+    || Object.entries(assessment).some(([key, value]) => key !== 'noveltyScore'
+      ? String(value || '').trim()
+      : value !== ''),
+  );
+}
+
+async function openSavedSummary() {
+  if (!api?.openSummary) {
+    showStatus('Run the desktop app to open a saved Markdown summary.');
+    return;
+  }
+
+  try {
+    const result = await api.openSummary();
+    if (!result) return;
+    if (hasCurrentReviewContent() && !window.confirm(
+      'Open this saved summary and replace the current metadata, review notes, and final assessment? Existing PDF marks will be kept.',
+    )) return;
+
+    const isPaperReviewerSummary = result.markdown.includes(SUMMARY_FORMAT_MARKER)
+      || /^# Review Summary\s*$/m.test(result.markdown);
+    const imported = isPaperReviewerSummary
+      ? parsePaperReviewerSummary(result.markdown)
+      : {
+        metadata: createEmptyMetadata(),
+        assessment: createEmptyAssessment(),
+        notesMarkdown: result.markdown,
+      };
+
+    metadata = { ...createEmptyMetadata(), ...imported.metadata };
+    metadataEdited = Object.fromEntries(Object.keys(metadata).map((key) => [key, Boolean(metadata[key])]));
+    Object.entries(metadataInputs).forEach(([key, input]) => { input.value = metadata[key]; });
+    reviewDraft = markdownToReviewHtml(imported.notesMarkdown, result.assets || []);
+    renderReviewDraft();
+    setAssessment(imported.assessment, { persist: false });
+    saveState();
+    closeSummary();
+    showStatus(`Opened ${result.name}. PDF marks were left unchanged.`);
+  } catch {
+    showStatus('Could not open that review summary.');
+  }
 }
 
 async function saveSummaryToPath() {
@@ -1753,6 +2025,7 @@ closeEditorButton.addEventListener('click', () => {
   closeMenu();
 });
 summaryButton.addEventListener('click', openSummary);
+openSummaryButton.addEventListener('click', openSavedSummary);
 saveSummaryButton.addEventListener('click', saveSummaryToPath);
 savePdfButton.addEventListener('click', saveAnnotatedPdf);
 clearReviewButton.addEventListener('click', requestClearReview);
@@ -1761,6 +2034,16 @@ closeSummaryButton.addEventListener('click', closeSummary);
 dismissSummaryButton.addEventListener('click', closeSummary);
 summaryDialog.addEventListener('click', (event) => {
   if (event.target === summaryDialog) closeSummary();
+});
+Object.entries(assessmentInputs).forEach(([key, input]) => {
+  input.addEventListener('input', () => {
+    if (key === 'noveltyScore' && input.value) {
+      input.value = String(clamp(Math.round(Number(input.value) || 1), 1, 10));
+    }
+    syncAssessmentFromInputs();
+    refreshSummaryPreview();
+    saveState();
+  });
 });
 window.addEventListener('focus', () => {
   if (!reloadAfterPreview) return;
@@ -1777,5 +2060,6 @@ setActiveSection(activeSection);
 setActiveMarkType(activeMarkType);
 setActiveColor(activeColor);
 setMetadata(metadata, { overwriteEdited: true });
+setAssessment(assessment, { persist: false });
 updatePageStatus();
 renderReviewDraft();

@@ -149,6 +149,37 @@ function imageTypeForPath(filePath) {
   return 'image/png';
 }
 
+async function markdownImageAssets(markdown, markdownPath) {
+  const assets = [];
+  const references = new Set();
+  const imagePattern = /!\[[^\]]*\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g;
+  let match = imagePattern.exec(markdown);
+
+  while (match) {
+    references.add(match[1]);
+    match = imagePattern.exec(markdown);
+  }
+
+  for (const reference of references) {
+    if (/^(data:|https?:\/\/)/i.test(reference)) continue;
+    try {
+      const decodedReference = decodeURIComponent(reference);
+      const assetPath = path.resolve(path.dirname(markdownPath), decodedReference);
+      if (!['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(path.extname(assetPath).toLowerCase())) continue;
+      const bytes = await fs.readFile(assetPath);
+      assets.push({
+        reference,
+        name: path.basename(assetPath),
+        dataUrl: `data:${imageTypeForPath(assetPath)};base64,${bytes.toString('base64')}`,
+      });
+    } catch {
+      // Missing image assets should not prevent the summary text from opening.
+    }
+  }
+
+  return assets;
+}
+
 function bufferFromDataUrl(dataUrl) {
   const match = String(dataUrl || '').match(/^data:image\/(?:png|jpe?g|webp|gif);base64,(.+)$/i);
   if (!match) return null;
@@ -404,6 +435,25 @@ ipcMain.handle('summary:save', async (_event, payload) => {
 
   await fs.writeFile(result.filePath, markdown, 'utf8');
   return { path: result.filePath, assetDir: assets.length > 0 ? assetDirPath : null };
+});
+
+ipcMain.handle('summary:open', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Open saved review summary',
+    properties: ['openFile'],
+    filters: [{ name: 'Markdown files', extensions: ['md', 'markdown'] }],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) return null;
+
+  const filePath = result.filePaths[0];
+  const markdown = await fs.readFile(filePath, 'utf8');
+  return {
+    path: filePath,
+    name: path.basename(filePath),
+    markdown,
+    assets: await markdownImageAssets(markdown, filePath),
+  };
 });
 
 ipcMain.handle('review:load', async (_event, payload) => {

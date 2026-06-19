@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('paperReviewerAPI', {
   openInPreview: (payload) => ipcRenderer.invoke('pdf:openInPreview', payload),
   tilePreviewCompanion: () => ipcRenderer.invoke('window:tilePreviewCompanion'),
   saveAnnotatedPdf: (payload) => ipcRenderer.invoke('pdf:saveAnnotated', payload),
+  openSummary: () => ipcRenderer.invoke('summary:open'),
   saveSummary: (payload) => ipcRenderer.invoke('summary:save', payload),
   loadReviewState: (payload) => ipcRenderer.invoke('review:load', payload),
   saveReviewState: (payload) => ipcRenderer.invoke('review:save', payload),
