@@ -409,15 +409,18 @@ ipcMain.handle('window:tilePreviewCompanion', async () => {
 
 ipcMain.handle('summary:save', async (_event, payload) => {
   const sourcePath = payload?.sourcePath;
-  const result = await dialog.showSaveDialog({
-    title: 'Save review summary',
-    defaultPath: defaultOutputPath(sourcePath, '-review-summary', '.md'),
-    filters: [{ name: 'Markdown files', extensions: ['md'] }],
-  });
+  let destinationPath = payload?.destinationPath;
+  if (!destinationPath) {
+    const result = await dialog.showSaveDialog({
+      title: 'Save review summary',
+      defaultPath: defaultOutputPath(sourcePath, '-review-summary', '.md'),
+      filters: [{ name: 'Markdown files', extensions: ['md'] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    destinationPath = result.filePath;
+  }
 
-  if (result.canceled || !result.filePath) return null;
-
-  const parsed = path.parse(result.filePath);
+  const parsed = path.parse(destinationPath);
   const assetDirName = `${parsed.name}-assets`;
   const assetDirPath = path.join(parsed.dir, assetDirName);
   const assets = Array.isArray(payload.assets) ? payload.assets : [];
@@ -433,8 +436,8 @@ ipcMain.handle('summary:save', async (_event, payload) => {
     }));
   }
 
-  await fs.writeFile(result.filePath, markdown, 'utf8');
-  return { path: result.filePath, assetDir: assets.length > 0 ? assetDirPath : null };
+  await fs.writeFile(destinationPath, markdown, 'utf8');
+  return { path: destinationPath, assetDir: assets.length > 0 ? assetDirPath : null };
 });
 
 ipcMain.handle('summary:open', async () => {

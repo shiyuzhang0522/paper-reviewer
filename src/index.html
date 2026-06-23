@@ -154,6 +154,7 @@
           <select id="notes-block-style" aria-label="Text style">
             <option value="P">Paragraph</option>
             <option value="H2">Heading</option>
+            <option value="H3">Subheading</option>
             <option value="BLOCKQUOTE">Quote</option>
             <option value="PRE">Code</option>
           </select>
@@ -180,11 +181,20 @@
           <button class="text-color-option" data-text-color="#4f9f63" type="button" title="Green" aria-label="Green"></button>
           <button class="text-color-option" data-text-color="#8d52d9" type="button" title="Purple" aria-label="Purple"></button>
         </div>
-        <label class="format-color" for="notes-highlight-color" title="Highlight color">
+        <button id="toggle-highlight-button" class="format-button" type="button" title="Toggle highlight" aria-label="Toggle highlight">
+          <span class="toolbar-highlight">H</span>
+        </button>
+        <label class="format-color compact-color" for="notes-highlight-color" title="Highlight color">
           <span class="sr-only">Highlight color</span>
           <input id="notes-highlight-color" type="color" value="#fff0a8" aria-label="Highlight color" />
         </label>
+        <button id="insert-table-button" type="button">Insert table</button>
         <button id="insert-note-image-button" type="button">Insert image</button>
+        <div class="review-zoom-controls" aria-label="Review page zoom">
+          <button id="review-zoom-out-button" type="button" aria-label="Zoom review page out">−</button>
+          <span id="review-zoom-status" aria-live="polite">100%</span>
+          <button id="review-zoom-in-button" type="button" aria-label="Zoom review page in">+</button>
+        </div>
       </div>
 
       <div class="review-page-shell">
@@ -262,6 +272,30 @@
     <div class="form-actions">
       <button id="save-annotation-button" class="primary-button" type="button">Save annotation</button>
       <button id="cancel-annotation-button" type="button">Cancel</button>
+    </div>
+  </section>
+
+  <section id="table-dialog" class="summary-dialog hidden" aria-label="Insert table">
+    <div class="table-dialog-card">
+      <div class="editor-header">
+        <h2>Insert table</h2>
+        <button id="close-table-dialog-button" class="icon-button" type="button" aria-label="Close insert table">x</button>
+      </div>
+      <p class="panel-note">The first row will be used as the table header.</p>
+      <div class="table-size-grid">
+        <label for="table-row-count">
+          <span>Rows</span>
+          <input id="table-row-count" type="number" min="2" max="10" step="1" value="3" />
+        </label>
+        <label for="table-column-count">
+          <span>Columns</span>
+          <input id="table-column-count" type="number" min="1" max="8" step="1" value="3" />
+        </label>
+      </div>
+      <div class="form-actions">
+        <button id="confirm-table-button" class="primary-button" type="button">Insert table</button>
+        <button id="cancel-table-button" type="button">Cancel</button>
+      </div>
     </div>
   </section>
 

@@ -6,6 +6,9 @@ const TEXT_COLOR_PRESETS = ['#291b34', '#7b6688', '#d94b55', '#4f8fdc', '#4f9f63
 const MIN_SCALE = 0.7;
 const MAX_SCALE = 1.8;
 const SCALE_STEP = 0.15;
+const MIN_REVIEW_SCALE = 0.7;
+const MAX_REVIEW_SCALE = 1.8;
+const REVIEW_SCALE_STEP = 0.1;
 const MIN_SPLIT = 32;
 const MAX_SPLIT = 68;
 const MAX_HIGHLIGHT_RECT_HEIGHT = 0.035;
@@ -18,8 +21,9 @@ const SUMMARY_ASSET_DIR_PLACEHOLDER = 'review-summary-assets';
 const SUMMARY_FORMAT_MARKER = '<!-- paper-reviewer-summary:v2 -->';
 const UNANSWERED_ASSESSMENT = '_Not answered._';
 const ALLOWED_REVIEW_TAGS = new Set([
-  'A', 'ARTICLE', 'B', 'BLOCKQUOTE', 'BR', 'DIV', 'EM', 'FIGCAPTION', 'FIGURE', 'H2', 'I', 'IMG',
-  'LI', 'OL', 'P', 'PRE', 'S', 'SPAN', 'STRIKE', 'STRONG', 'SUB', 'SUP', 'U', 'UL',
+  'A', 'ARTICLE', 'B', 'BLOCKQUOTE', 'BR', 'DIV', 'EM', 'FIGCAPTION', 'FIGURE', 'H2', 'H3', 'I', 'IMG',
+  'LI', 'OL', 'P', 'PRE', 'S', 'SPAN', 'STRIKE', 'STRONG', 'SUB', 'SUP', 'TABLE', 'TBODY', 'TD',
+  'TH', 'THEAD', 'TR', 'U', 'UL',
 ]);
 const ALLOWED_REVIEW_CLASSES = new Set([
   'review-linked-note', 'review-linked-note-meta', 'review-linked-note-comment',
@@ -89,8 +93,19 @@ const notesBlockStyle = document.getElementById('notes-block-style');
 const notesTextSize = document.getElementById('notes-text-size');
 const notesTextColor = document.getElementById('notes-text-color');
 const notesHighlightColor = document.getElementById('notes-highlight-color');
+const toggleHighlightButton = document.getElementById('toggle-highlight-button');
 const textColorPresetButtons = document.querySelectorAll('.text-color-option');
+const insertTableButton = document.getElementById('insert-table-button');
 const insertNoteImageButton = document.getElementById('insert-note-image-button');
+const reviewZoomOutButton = document.getElementById('review-zoom-out-button');
+const reviewZoomInButton = document.getElementById('review-zoom-in-button');
+const reviewZoomStatus = document.getElementById('review-zoom-status');
+const tableDialog = document.getElementById('table-dialog');
+const tableRowCount = document.getElementById('table-row-count');
+const tableColumnCount = document.getElementById('table-column-count');
+const confirmTableButton = document.getElementById('confirm-table-button');
+const cancelTableButton = document.getElementById('cancel-table-button');
+const closeTableDialogButton = document.getElementById('close-table-dialog-button');
 const assessmentInputs = {
   journalFit: document.getElementById('assessment-journal-fit'),
   majorClaims: document.getElementById('assessment-major-claims'),
@@ -123,6 +138,8 @@ let activeMarkType = 'highlight';
 let activeColor = 'pink';
 let currentPage = 1;
 let scale = 1;
+let reviewScale = 1;
+let summaryPath = '';
 let paperControlsCollapsed = false;
 let previewCompanionMode = false;
 let previewPanelHidden = false;
@@ -138,6 +155,7 @@ let pendingWheelDelta = 0;
 let wheelZoomTimer = null;
 let reviewDraftSaveTimer = null;
 let lastReviewRange = null;
+let highlightClickTimer = null;
 let reloadAfterPreview = false;
 let activeAnnotationId = null;
 
@@ -292,6 +310,8 @@ function reviewState() {
     activeColor,
     currentPage,
     scale,
+    reviewScale,
+    summaryPath,
     paperControlsCollapsed,
     previewCompanionMode,
     previewPanelHidden,
@@ -416,6 +436,15 @@ async function setScale(nextScale) {
   scale = clampedScale;
   await renderPdf();
   saveState();
+}
+
+function setReviewScale(nextScale, { persist = true } = {}) {
+  reviewScale = clamp(Number(Number(nextScale).toFixed(2)), MIN_REVIEW_SCALE, MAX_REVIEW_SCALE);
+  reviewDraftEditor.style.zoom = String(reviewScale);
+  reviewZoomStatus.textContent = `${Math.round(reviewScale * 100)}%`;
+  reviewZoomOutButton.disabled = reviewScale <= MIN_REVIEW_SCALE;
+  reviewZoomInButton.disabled = reviewScale >= MAX_REVIEW_SCALE;
+  if (persist) saveState();
 }
 
 function setMetadata(nextMetadata, { markEdited = false, overwriteEdited = false } = {}) {
@@ -653,6 +682,66 @@ function execReviewCommand(command, value = null) {
   saveReviewRange();
 }
 
+function normalizedCssColor(value) {
+  const probe = document.createElement('span');
+  probe.style.color = value || '';
+  document.body.appendChild(probe);
+  const normalized = getComputedStyle(probe).color;
+  probe.remove();
+  return normalized;
+}
+
+function selectedTextHasHighlight(range, color) {
+  const expectedColor = normalizedCssColor(color);
+  const walker = document.createTreeWalker(reviewDraftEditor, NodeFilter.SHOW_TEXT);
+  let textNode = walker.nextNode();
+  while (textNode) {
+    if (textNode.textContent && range.intersectsNode(textNode)) {
+      const backgroundColor = getComputedStyle(textNode.parentElement).backgroundColor;
+      if (normalizedCssColor(backgroundColor) === expectedColor) return true;
+    }
+    textNode = walker.nextNode();
+  }
+  return false;
+}
+
+function reviewBackgroundForRange(range) {
+  const node = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+    ? range.commonAncestorContainer
+    : range.commonAncestorContainer.parentElement;
+  const tableCell = node?.closest?.('th, td');
+  return getComputedStyle(tableCell || reviewDraftEditor).backgroundColor || '#ffffff';
+}
+
+function applyReviewHighlight({ remove = false } = {}) {
+  restoreReviewSelection();
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+  const range = selection.getRangeAt(0);
+  if (!reviewDraftEditor.contains(range.commonAncestorContainer)) return;
+
+  const shouldRemove = remove || selectedTextHasHighlight(range, notesHighlightColor.value);
+  const color = shouldRemove ? reviewBackgroundForRange(range) : notesHighlightColor.value;
+  document.execCommand('hiliteColor', false, color);
+  scheduleReviewDraftSave();
+  saveReviewRange();
+}
+
+function handleHighlightClick() {
+  clearTimeout(highlightClickTimer);
+  highlightClickTimer = setTimeout(() => {
+    highlightClickTimer = null;
+    applyReviewHighlight();
+  }, 220);
+}
+
+function handleHighlightDoubleClick(event) {
+  event.preventDefault();
+  clearTimeout(highlightClickTimer);
+  highlightClickTimer = null;
+  applyReviewHighlight({ remove: true });
+}
+
 function applyTextSize(size) {
   restoreReviewSelection();
   const selection = window.getSelection();
@@ -689,7 +778,7 @@ function formatBlock(tagName) {
 
 function blockStyleForNode(node) {
   const element = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-  const block = element?.closest?.('pre, h2, blockquote, p');
+  const block = element?.closest?.('pre, h2, h3, blockquote, p');
   if (!block || !reviewDraftEditor.contains(block)) return 'P';
   return block.tagName.toUpperCase();
 }
@@ -700,6 +789,62 @@ function updateNotesBlockStyle() {
   const range = selection.getRangeAt(0);
   if (!reviewDraftEditor.contains(range.commonAncestorContainer)) return;
   notesBlockStyle.value = blockStyleForNode(range.commonAncestorContainer);
+}
+
+function createReviewTable(rows, columns) {
+  const table = document.createElement('table');
+  const head = document.createElement('thead');
+  const body = document.createElement('tbody');
+
+  for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
+    const row = document.createElement('tr');
+    for (let columnIndex = 0; columnIndex < columns; columnIndex += 1) {
+      const cell = document.createElement(rowIndex === 0 ? 'th' : 'td');
+      cell.innerHTML = '<br>';
+      row.appendChild(cell);
+    }
+    (rowIndex === 0 ? head : body).appendChild(row);
+  }
+
+  table.append(head, body);
+  return table;
+}
+
+function openTableDialog() {
+  saveReviewRange();
+  tableRowCount.value = '3';
+  tableColumnCount.value = '3';
+  tableDialog.classList.remove('hidden');
+  tableRowCount.focus();
+  tableRowCount.select();
+}
+
+function closeTableDialog() {
+  tableDialog.classList.add('hidden');
+  restoreReviewSelection();
+}
+
+function insertReviewTable() {
+  const rows = clamp(Math.round(Number(tableRowCount.value) || 3), 2, 10);
+  const columns = clamp(Math.round(Number(tableColumnCount.value) || 3), 1, 8);
+  const table = createReviewTable(rows, columns);
+  const spacer = document.createElement('p');
+  spacer.innerHTML = '<br>';
+  closeTableDialog();
+  insertNodeIntoReviewDraft(table);
+  insertNodeIntoReviewDraft(spacer);
+  const firstCell = table.querySelector('th, td');
+  if (firstCell) {
+    const range = document.createRange();
+    range.selectNodeContents(firstCell);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    saveReviewRange();
+  }
+  updateReviewDraftState();
+  saveState();
 }
 
 function readFileAsDataUrl(file) {
@@ -797,6 +942,30 @@ function markdownEscape(text) {
   return String(text || '').replace(/\[/g, '\\[').replace(/\]/g, '\\]');
 }
 
+function markdownTableCell(text) {
+  return String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\|/g, '\\|');
+}
+
+function reviewTableAsMarkdown(table) {
+  const rows = Array.from(table.querySelectorAll('tr')).map((row) => (
+    Array.from(row.children).map((cell) => markdownTableCell(cell.textContent))
+  ));
+  if (rows.length === 0) return [];
+  const columnCount = Math.max(...rows.map((row) => row.length), 1);
+  const normalizedRows = rows.map((row) => (
+    Array.from({ length: columnCount }, (_, index) => row[index] || '')
+  ));
+  return [
+    `| ${normalizedRows[0].join(' | ')} |`,
+    `| ${Array.from({ length: columnCount }, () => '---').join(' | ')} |`,
+    ...normalizedRows.slice(1).map((row) => `| ${row.join(' | ')} |`),
+    '',
+  ];
+}
+
 function richReviewDraftAsMarkdown(assetDirName = SUMMARY_ASSET_DIR_PLACEHOLDER) {
   const clone = reviewDraftEditor.cloneNode(true);
   const assets = [];
@@ -834,6 +1003,17 @@ function richReviewDraftAsMarkdown(assetDirName = SUMMARY_ASSET_DIR_PLACEHOLDER)
     if (element.matches('h2')) {
       const heading = element.textContent.replace(/\s+/g, ' ').trim();
       if (heading) lines.push(`### ${heading}`, '');
+      return;
+    }
+
+    if (element.matches('h3')) {
+      const heading = element.textContent.replace(/\s+/g, ' ').trim();
+      if (heading) lines.push(`#### ${heading}`, '');
+      return;
+    }
+
+    if (element.matches('table')) {
+      lines.push(...reviewTableAsMarkdown(element));
       return;
     }
 
@@ -1129,6 +1309,9 @@ async function loadPdfBytes(bytes, name, sourcePath = '', { restoreState = true 
   assessment = createEmptyAssessment();
   currentPage = 1;
   scale = 1;
+  reviewScale = 1;
+  summaryPath = '';
+  setReviewScale(1, { persist: false });
 
   if (restoreState && api && pdfPath) {
     const saved = await api.loadReviewState({ sourcePath: pdfPath });
@@ -1169,6 +1352,8 @@ function applySavedState(saved) {
   activeColor = normalizeColor(saved.activeColor);
   currentPage = saved.currentPage || 1;
   scale = saved.scale || 1;
+  reviewScale = clamp(Number(saved.reviewScale) || 1, MIN_REVIEW_SCALE, MAX_REVIEW_SCALE);
+  summaryPath = typeof saved.summaryPath === 'string' ? saved.summaryPath : '';
   paperControlsCollapsed = Boolean(saved.paperControlsCollapsed);
   previewCompanionMode = Boolean(saved.previewCompanionMode);
   previewPanelHidden = Boolean(saved.previewPanelHidden);
@@ -1178,6 +1363,7 @@ function applySavedState(saved) {
   setPreviewCompanionMode(previewCompanionMode, { persist: false });
   setPreviewPanelHidden(previewPanelHidden, { persist: false });
   setMetadataPanelCollapsed(metadataPanelCollapsed, { persist: false });
+  setReviewScale(reviewScale, { persist: false });
   setActiveTag(activeTag);
   setActiveSection(activeSection);
   setActiveMarkType(activeMarkType);
@@ -1319,10 +1505,13 @@ async function clearReview() {
   assessment = createEmptyAssessment();
   currentPage = 1;
   scale = 1;
+  reviewScale = 1;
+  summaryPath = '';
   setPreviewCompanionMode(false);
   setPreviewPanelHidden(false);
   setPaperControlsCollapsed(false);
   setMetadataPanelCollapsed(false);
+  setReviewScale(1, { persist: false });
   setSplitPercent(50);
   Object.keys(metadataInputs).forEach((key) => { metadataInputs[key].value = ''; });
   setAssessment(createEmptyAssessment(), { persist: false });
@@ -1484,6 +1673,33 @@ function parsePaperReviewerSummary(markdown) {
   };
 }
 
+function parseMarkdownTableRow(line) {
+  const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+  const cells = [];
+  let cell = '';
+  let escaped = false;
+  for (const character of trimmed) {
+    if (escaped) {
+      cell += character;
+      escaped = false;
+    } else if (character === '\\') {
+      escaped = true;
+    } else if (character === '|') {
+      cells.push(cell.trim());
+      cell = '';
+    } else {
+      cell += character;
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
+function isMarkdownTableSeparator(line) {
+  const cells = parseMarkdownTableRow(line);
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
 function markdownToReviewHtml(markdown, importedAssets = []) {
   const assetMap = new Map(importedAssets.map((asset) => [asset.reference, asset]));
   const container = document.createElement('div');
@@ -1507,20 +1723,42 @@ function markdownToReviewHtml(markdown, importedAssets = []) {
     codeLines = [];
   };
 
-  lines.forEach((line) => {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     if (/^```/.test(line.trim())) {
       flushParagraph();
       if (inCodeBlock) flushCode();
       inCodeBlock = !inCodeBlock;
-      return;
+      continue;
     }
     if (inCodeBlock) {
       codeLines.push(line);
-      return;
+      continue;
     }
     if (!line.trim()) {
       flushParagraph();
-      return;
+      continue;
+    }
+
+    if (line.includes('|') && index + 1 < lines.length && isMarkdownTableSeparator(lines[index + 1])) {
+      flushParagraph();
+      const tableRows = [parseMarkdownTableRow(line)];
+      index += 2;
+      while (index < lines.length && lines[index].includes('|') && lines[index].trim()) {
+        tableRows.push(parseMarkdownTableRow(lines[index]));
+        index += 1;
+      }
+      index -= 1;
+      const columnCount = Math.max(...tableRows.map((row) => row.length), 1);
+      const table = createReviewTable(Math.max(tableRows.length, 2), columnCount);
+      tableRows.forEach((row, rowIndex) => {
+        const cells = table.querySelectorAll('tr')[rowIndex]?.children || [];
+        Array.from(cells).forEach((cell, columnIndex) => {
+          cell.textContent = row[columnIndex] || '';
+        });
+      });
+      container.appendChild(table);
+      continue;
     }
 
     const imageMatch = line.trim().match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)$/);
@@ -1529,16 +1767,16 @@ function markdownToReviewHtml(markdown, importedAssets = []) {
       const asset = assetMap.get(imageMatch[2]);
       if (asset?.dataUrl) container.appendChild(createReviewImageFigure(asset.dataUrl, imageMatch[1] || asset.name));
       else paragraphLines.push(`[Image unavailable: ${imageMatch[1] || imageMatch[2]}]`);
-      return;
+      continue;
     }
 
-    const headingMatch = line.match(/^#{1,6}\s+(.+)$/);
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
       flushParagraph();
-      const heading = document.createElement('h2');
-      heading.textContent = headingMatch[1];
+      const heading = document.createElement(headingMatch[1].length >= 4 ? 'h3' : 'h2');
+      heading.textContent = headingMatch[2];
       container.appendChild(heading);
-      return;
+      continue;
     }
 
     if (/^>\s?/.test(line)) {
@@ -1546,11 +1784,11 @@ function markdownToReviewHtml(markdown, importedAssets = []) {
       const quote = document.createElement('blockquote');
       quote.textContent = line.replace(/^>\s?/, '');
       container.appendChild(quote);
-      return;
+      continue;
     }
 
     paragraphLines.push(line.replace(/^[-*+]\s+/, '• '));
-  });
+  }
 
   if (inCodeBlock || codeLines.length) flushCode();
   flushParagraph();
@@ -1594,6 +1832,7 @@ async function openSavedSummary() {
     metadataEdited = Object.fromEntries(Object.keys(metadata).map((key) => [key, Boolean(metadata[key])]));
     Object.entries(metadataInputs).forEach(([key, input]) => { input.value = metadata[key]; });
     reviewDraft = markdownToReviewHtml(imported.notesMarkdown, result.assets || []);
+    summaryPath = result.path || '';
     renderReviewDraft();
     setAssessment(imported.assessment, { persist: false });
     saveState();
@@ -1608,10 +1847,30 @@ async function saveSummaryToPath() {
   const { markdown, assets } = generateMarkdownSummary();
   if (!api) {
     copyStatus.textContent = 'Run the desktop app to save beside the PDF. Markdown is ready to copy.';
+    showStatus(copyStatus.textContent);
     return;
   }
-  const result = await api.saveSummary({ sourcePath: pdfPath, markdown, assets });
-  copyStatus.textContent = result?.path ? `Saved to ${result.path}` : 'Summary save cancelled.';
+  try {
+    const result = await api.saveSummary({
+      sourcePath: pdfPath,
+      destinationPath: summaryPath,
+      markdown,
+      assets,
+    });
+    if (result?.path) {
+      summaryPath = result.path;
+      saveState();
+      copyStatus.textContent = `Saved to ${result.path}`;
+      showStatus(`Saved review summary to ${result.path}`);
+      return result;
+    }
+    copyStatus.textContent = 'Summary save cancelled.';
+    return null;
+  } catch {
+    copyStatus.textContent = 'Could not save the review summary.';
+    showStatus(copyStatus.textContent);
+    return null;
+  }
 }
 
 async function saveAnnotatedPdf({ silent = false, allowEmpty = false } = {}) {
@@ -1817,10 +2076,25 @@ document.addEventListener('click', (event) => {
   if (!insideSelectionUi && !pdfViewer.contains(event.target)) closeMenu();
 });
 document.addEventListener('keydown', (event) => {
+  const commandKey = event.metaKey || event.ctrlKey;
+  if (commandKey && event.key.toLowerCase() === 's') {
+    event.preventDefault();
+    saveSummaryToPath();
+    return;
+  }
+
+  const target = event.target;
+  const usingReviewerPanel = document.querySelector('.comment-panel')?.contains(target);
+  if (commandKey && usingReviewerPanel && ['+', '=', '-', '_'].includes(event.key)) {
+    event.preventDefault();
+    const direction = ['+', '='].includes(event.key) ? 1 : -1;
+    setReviewScale(reviewScale + direction * REVIEW_SCALE_STEP);
+    return;
+  }
+
   if (!['Delete', 'Backspace'].includes(event.key)) return;
   if (!activeAnnotationId) return;
 
-  const target = event.target;
   const typingInEditableField = target instanceof HTMLInputElement
     || target instanceof HTMLTextAreaElement
     || target?.closest?.('.review-linked-note-comment')
@@ -1897,6 +2171,7 @@ reviewDraftEditor.addEventListener('paste', (event) => {
   const text = event.clipboardData?.getData('text/plain') || '';
   document.execCommand('insertText', false, text);
 });
+document.querySelector('.notes-format-toolbar')?.addEventListener('pointerdown', saveReviewRange, true);
 formatButtons.forEach((button) => {
   button.addEventListener('click', () => execReviewCommand(button.dataset.command));
 });
@@ -1910,6 +2185,8 @@ notesTextSize.addEventListener('change', () => {
   notesTextSize.value = '';
 });
 notesTextColor.addEventListener('input', () => execReviewCommand('foreColor', notesTextColor.value));
+toggleHighlightButton.addEventListener('click', handleHighlightClick);
+toggleHighlightButton.addEventListener('dblclick', handleHighlightDoubleClick);
 notesHighlightColor.addEventListener('input', () => execReviewCommand('hiliteColor', notesHighlightColor.value));
 textColorPresetButtons.forEach((button) => {
   const color = button.dataset.textColor;
@@ -1937,6 +2214,21 @@ insertNoteImageButton.addEventListener('click', async () => {
   } catch {
     showStatus('Could not insert that image.');
   }
+});
+insertTableButton.addEventListener('click', openTableDialog);
+confirmTableButton.addEventListener('click', insertReviewTable);
+cancelTableButton.addEventListener('click', closeTableDialog);
+closeTableDialogButton.addEventListener('click', closeTableDialog);
+tableDialog.addEventListener('click', (event) => {
+  if (event.target === tableDialog) closeTableDialog();
+});
+[tableRowCount, tableColumnCount].forEach((input) => {
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      insertReviewTable();
+    }
+  });
 });
 
 [reviewPageShell, reviewDraftEditor].forEach((dropTarget) => {
@@ -1975,6 +2267,8 @@ prevPageButton.addEventListener('click', () => pdfDocument && scrollToPage(Math.
 nextPageButton.addEventListener('click', () => pdfDocument && scrollToPage(Math.min(pdfDocument.numPages, currentPage + 1)));
 zoomOutButton.addEventListener('click', () => setScale(scale - SCALE_STEP));
 zoomInButton.addEventListener('click', () => setScale(scale + SCALE_STEP));
+reviewZoomOutButton.addEventListener('click', () => setReviewScale(reviewScale - REVIEW_SCALE_STEP));
+reviewZoomInButton.addEventListener('click', () => setReviewScale(reviewScale + REVIEW_SCALE_STEP));
 splitResizer?.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   splitResizer.classList.add('is-dragging');
@@ -2055,6 +2349,7 @@ setSplitPercent(splitPercent, { persist: false });
 setPaperControlsCollapsed(paperControlsCollapsed, { persist: false });
 setPreviewCompanionMode(previewCompanionMode, { persist: false });
 setMetadataPanelCollapsed(metadataPanelCollapsed, { persist: false });
+setReviewScale(reviewScale, { persist: false });
 setActiveTag(activeTag);
 setActiveSection(activeSection);
 setActiveMarkType(activeMarkType);
