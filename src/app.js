@@ -78,6 +78,7 @@ const closeEditorButton = document.getElementById('close-editor-button');
 const summaryButton = document.getElementById('summary-button');
 const openSummaryButton = document.getElementById('open-summary-button');
 const saveSummaryButton = document.getElementById('save-summary-button');
+const saveSummaryPdfButton = document.getElementById('save-summary-pdf-button');
 const clearReviewButton = document.getElementById('clear-review-button');
 const summaryDialog = document.getElementById('summary-dialog');
 const summaryOutput = document.getElementById('summary-output');
@@ -1589,8 +1590,20 @@ function generateMarkdownSummary() {
   return { markdown: lines.join('\n').trimEnd(), assets: draft.assets };
 }
 
+function currentSummaryPayload({ persist = true, updatePreview = true } = {}) {
+  clearTimeout(reviewDraftSaveTimer);
+  reviewDraftSaveTimer = null;
+  updateReviewDraftState();
+  syncAssessmentFromInputs();
+  syncAnnotationCommentsFromDraft();
+  const payload = generateMarkdownSummary();
+  if (updatePreview) summaryOutput.value = payload.markdown;
+  if (persist) saveState();
+  return payload;
+}
+
 function refreshSummaryPreview() {
-  summaryOutput.value = generateMarkdownSummary().markdown;
+  currentSummaryPayload();
 }
 
 function openSummary() {
@@ -1844,7 +1857,7 @@ async function openSavedSummary() {
 }
 
 async function saveSummaryToPath() {
-  const { markdown, assets } = generateMarkdownSummary();
+  const { markdown, assets } = currentSummaryPayload();
   if (!api) {
     copyStatus.textContent = 'Run the desktop app to save beside the PDF. Markdown is ready to copy.';
     showStatus(copyStatus.textContent);
@@ -1868,6 +1881,34 @@ async function saveSummaryToPath() {
     return null;
   } catch {
     copyStatus.textContent = 'Could not save the review summary.';
+    showStatus(copyStatus.textContent);
+    return null;
+  }
+}
+
+async function saveSummaryToPdf() {
+  const { markdown, assets } = currentSummaryPayload();
+  if (!api?.saveSummaryPdf) {
+    copyStatus.textContent = 'Run the desktop app to save the review summary as PDF.';
+    showStatus(copyStatus.textContent);
+    return null;
+  }
+  try {
+    const result = await api.saveSummaryPdf({
+      sourcePath: pdfPath,
+      summaryPath,
+      markdown,
+      assets,
+    });
+    if (result?.path) {
+      copyStatus.textContent = `Saved PDF to ${result.path}`;
+      showStatus(`Saved review summary PDF to ${result.path}`);
+      return result;
+    }
+    copyStatus.textContent = 'PDF save cancelled.';
+    return null;
+  } catch {
+    copyStatus.textContent = 'Could not save the review summary PDF.';
     showStatus(copyStatus.textContent);
     return null;
   }
@@ -1897,6 +1938,7 @@ async function saveAnnotatedPdf({ silent = false, allowEmpty = false } = {}) {
 }
 
 function copySummary() {
+  currentSummaryPayload();
   summaryOutput.select();
   const text = summaryOutput.value;
   if (navigator.clipboard?.writeText) {
@@ -2321,6 +2363,7 @@ closeEditorButton.addEventListener('click', () => {
 summaryButton.addEventListener('click', openSummary);
 openSummaryButton.addEventListener('click', openSavedSummary);
 saveSummaryButton.addEventListener('click', saveSummaryToPath);
+saveSummaryPdfButton.addEventListener('click', saveSummaryToPdf);
 savePdfButton.addEventListener('click', saveAnnotatedPdf);
 clearReviewButton.addEventListener('click', requestClearReview);
 copySummaryButton.addEventListener('click', copySummary);
