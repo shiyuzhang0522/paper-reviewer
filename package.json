@@ -6,6 +6,7 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
+    "test": "node test/summary-pdf.test.js",
     "package:mac": "electron-builder --mac"
   },
   "build": {

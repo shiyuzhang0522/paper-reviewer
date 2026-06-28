@@ -1893,6 +1893,10 @@ async function saveSummaryToPdf() {
     showStatus(copyStatus.textContent);
     return null;
   }
+  const originalLabel = saveSummaryPdfButton.textContent;
+  saveSummaryPdfButton.disabled = true;
+  saveSummaryPdfButton.textContent = 'Saving...';
+  copyStatus.textContent = 'Saving PDF...';
   try {
     const result = await api.saveSummaryPdf({
       sourcePath: pdfPath,
@@ -1907,10 +1911,14 @@ async function saveSummaryToPdf() {
     }
     copyStatus.textContent = 'PDF save cancelled.';
     return null;
-  } catch {
-    copyStatus.textContent = 'Could not save the review summary PDF.';
+  } catch (error) {
+    console.error('Could not save review summary PDF:', error);
+    copyStatus.textContent = 'Could not save the review summary PDF. Check the destination and try again.';
     showStatus(copyStatus.textContent);
     return null;
+  } finally {
+    saveSummaryPdfButton.disabled = false;
+    saveSummaryPdfButton.textContent = originalLabel;
   }
 }
 
